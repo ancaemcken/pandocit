@@ -695,7 +695,9 @@ export class ZoteroLibraryPanel {
     await this.plugin.bibManager.initPromise.promise;
 
     const hasZotero = !!this.plugin.settings.pullFromZoteroApi;
-    const hasBib = !!this.plugin.settings.pathToBibliography?.trim();
+    const hasBib =
+      !!this.plugin.settings.pathToBibliography?.trim() ||
+      this.plugin.bibManager.bibCache.size > 0;
 
     this.flatRows = [];
     this.treeRoots = [];
@@ -709,7 +711,7 @@ export class ZoteroLibraryPanel {
 
     if (hasBib) {
       const bibPath = this.plugin.settings.pathToBibliography?.trim();
-      if (!hasZotero) {
+      if (!hasZotero && bibPath) {
         await this.plugin.bibManager.loadGlobalBibFile(true);
       }
       if (bibPath) {

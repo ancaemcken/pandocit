@@ -127,7 +127,8 @@ export class PandoCitShellView extends ItemView {
     if (tab === 'zotero' && !this.zoteroPanel) {
       const hasLibrary =
         !!this.plugin.settings.pullFromZoteroApi ||
-        !!this.plugin.settings.pathToBibliography?.trim();
+        !!this.plugin.settings.pathToBibliography?.trim() ||
+        this.plugin.bibManager.bibCache.size > 0;
       const host = this.panelHosts.get('zotero')!;
       if (!hasLibrary) {
         host.empty();

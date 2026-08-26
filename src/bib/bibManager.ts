@@ -214,6 +214,11 @@ export class BibManager {
     return !!this.resolveBibliographyId(key, bibCache);
   }
 
+  /** Vrai si le fichier déclare une bibliographie (clé `bibliography`) en frontmatter. */
+  hasFrontmatterBibliography(file: TFile): boolean {
+    return !!getScopedSettings(file)?.bibliography;
+  }
+
   registerBibliographyEntry(
     entry: PartialCSLEntry,
     aliasKey?: string
@@ -394,25 +399,24 @@ export class BibManager {
       try {
         const bib = await bibToCSL(settings.bibliography, getVaultRoot);
 
-        if (pluginSettings.pullFromZoteroApi) {
+        // Fusion avec la bibliographie globale : les citations de la note résolvent
+        // sur les deux sources (fichier global + fichier du frontmatter), et la liste
+        // de référence affiche les entrées citées des deux, sans doublons.
+        for (const entry of bib) {
+          this.bibCache.set(entry.id, entry);
+        }
+        bibCache = this.bibCache;
+        if (this.fuse) {
           for (const entry of bib) {
-            this.bibCache.set(entry.id, entry);
-          }
-          bibCache = this.bibCache;
-          if (this.fuse) {
-            for (const entry of bib) {
-              this.fuse.add(entry);
-            }
-          } else {
-            fuse = new Fuse(Array.from(this.bibCache.values()), fuseSettings);
+            this.fuse.add(entry);
           }
         } else {
-          bibCache = new Map();
-          for (const entry of bib) {
-            bibCache.set(entry.id, entry);
-          }
-          fuse = new Fuse(bib, fuseSettings);
+          this.fuse = new Fuse(
+            Array.from(this.bibCache.values()),
+            fuseSettings
+          );
         }
+        fuse = new Fuse(Array.from(bibCache.values()), fuseSettings);
 
         await this.mergePdfLinksFromBibliographyFile(settings.bibliography, {
           replace: false,
@@ -921,6 +925,11 @@ export class BibManager {
         ? cachedDoc.source
         : await this.loadScopedEngine(settings);
 
+    // Un échec de chargement du fichier `bibliography` du frontmatter ne doit pas
+    // rester bloqué sur la bibliographie globale : on ne mémorise pas ces settings,
+    // le fichier local sera retenté au prochain passage.
+    const scopedFailed = !!settings?.bibliography && source === this;
+
     if (!source?.engine) {
       if (!this.engine) {
         await this.ensureGlobalEngine();
@@ -935,8 +944,13 @@ export class BibManager {
     }
 
     if (isDesktop() && settings?.bibliography) {
-      const bibPath = getBibPath(settings.bibliography, getVaultRoot);
-      if (!this.watcherCache.has(bibPath)) {
+      let bibPath: string | null = null;
+      try {
+        bibPath = getBibPath(settings.bibliography, getVaultRoot);
+      } catch (e) {
+        console.error('[PandoCit] cannot watch bibliography file', e);
+      }
+      if (bibPath && !this.watcherCache.has(bibPath)) {
         const fsApi = getFs();
         let dbTimer = 0;
         this.watcherCache.set(
@@ -1063,7 +1077,7 @@ export class BibManager {
       bib: parsed,
       citations,
       citeBibMap,
-      settings,
+      settings: scopedFailed ? null : settings,
       source,
     };
 

@@ -567,7 +567,16 @@ export default class ReferenceList extends Plugin {
   processReferences = async () => {
     const { settings } = this;
     const panel = this.shell?.refsPanel;
-    if (!settings.pathToBibliography && !settings.pullFromZoteroApi) {
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const hasFrontmatterBib =
+      !!activeView?.file &&
+      this.bibManager.hasFrontmatterBibliography(activeView.file);
+
+    if (
+      !settings.pathToBibliography &&
+      !settings.pullFromZoteroApi &&
+      !hasFrontmatterBib
+    ) {
       return panel?.setMessage(
         t(
           'Please provide the path to your pandoc compatible bibliography file in the PandoCit plugin settings.'
@@ -575,7 +584,6 @@ export default class ReferenceList extends Plugin {
       );
     }
 
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (activeView) {
       try {
         const fileContent = await this.app.vault.cachedRead(activeView.file);
