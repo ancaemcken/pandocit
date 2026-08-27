@@ -1,1 +1,1 @@
-f464caf fix: When both global and local bib files are configured, merge and dedupe ref list
+9f440ad fix: When using Reload bibliography file, reload both local and global
