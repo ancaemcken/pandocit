@@ -306,6 +306,16 @@ export default class ReferenceList extends Plugin {
               if (rootLeaf === leaf) {
                 if (leaf.view instanceof MarkdownView) {
                   this.processReferences();
+                  // Le volet Bibliothèque suit la note active : re-rend uniquement
+                  // si elle a un fichier `bibliography` scoped en frontmatter (mode
+                  // fusion, hors API Zotero dont le re-rend ferait des appels réseau).
+                  if (
+                    !this.settings.pullFromZoteroApi &&
+                    this.settings.mergeScopedBibliography &&
+                    this.bibManager.hasFrontmatterBibliography(leaf.view.file)
+                  ) {
+                    void this.shell?.zoteroPanel?.refreshList();
+                  }
                 } else {
                   this.shell?.refsPanel.setNoContentMessage();
                 }
