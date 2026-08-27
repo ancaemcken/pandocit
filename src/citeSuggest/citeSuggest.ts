@@ -18,6 +18,19 @@ interface Loading {
 
 const triggerRE = /(^|[ \t\v[\-\r\n;])(@)([\p{L}\p{N}:.#$%&\-+?<>~_/]+)$/u;
 
+function dedupeResults(
+  results: Fuse.FuseResult<PartialCSLEntry>[]
+): Fuse.FuseResult<PartialCSLEntry>[] {
+  const seen = new Set<string>();
+  const out: Fuse.FuseResult<PartialCSLEntry>[] = [];
+  for (const r of results) {
+    if (seen.has(r.item.id)) continue;
+    seen.add(r.item.id);
+    out.push(r);
+  }
+  return out;
+}
+
 export class CiteSuggest extends EditorSuggest<
   Fuse.FuseResult<PartialCSLEntry> | Loading
 > {
@@ -69,17 +82,25 @@ export class CiteSuggest extends EditorSuggest<
 
     const { bibManager } = plugin;
 
-    let fuse = bibManager.fuse;
-    if (bibManager.fileCache.has(context.file)) {
-      const cache = bibManager.fileCache.get(context.file);
-      fuse = cache.source.fuse;
+    const source = bibManager.fileCache.get(context.file)?.source;
+    const fuse = source?.fuse ?? bibManager.fuse;
+    const scopedFuse = source?.scopedFuse;
+
+    let results = fuse?.search(context.query, {
+      limit: this.limit,
+    }) ?? [];
+
+    if (scopedFuse) {
+      const scopedResults = scopedFuse.search(context.query, {
+        limit: this.limit,
+      }) ?? [];
+      results = dedupeResults([...results, ...scopedResults]).slice(
+        0,
+        this.limit
+      );
     }
 
-    const results = fuse?.search(context.query, {
-      limit: this.limit,
-    });
-
-    return results?.length ? results : null;
+    return results.length ? results : null;
   }
 
   renderSuggestion(

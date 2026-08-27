@@ -112,14 +112,23 @@ export class CitekeyPickerModal extends Modal {
     const { bibManager } = this.plugin;
     const q = this.query.trim();
 
-    if (!bibManager.fuse) {
+    const source = bibManager.fileCache.get(this.markdownView.file)?.source;
+    const scopedEntries = source?.scopedBibCache
+      ? Array.from(source.scopedBibCache.values())
+      : [];
+    const scopedFuse = source?.scopedFuse;
+
+    if (!bibManager.fuse && !scopedFuse) {
       this.results = [];
       this.renderList();
       return;
     }
 
     if (!q) {
-      const all = listBibliographyEntriesFromCache(bibManager.bibCache).sort((a, b) =>
+      const all = dedupeBibliographyEntries([
+        ...listBibliographyEntriesFromCache(bibManager.bibCache),
+        ...scopedEntries,
+      ]).sort((a, b) =>
         (a.title || a.id).localeCompare(b.title || b.id, undefined, {
           sensitivity: 'base',
         })
@@ -129,11 +138,15 @@ export class CitekeyPickerModal extends Modal {
         refIndex: i,
       })) as Fuse.FuseResult<PartialCSLEntry>[];
     } else {
-      const deduped = dedupeBibliographyEntries(
-        (bibManager.fuse.search(q, { limit: RESULT_LIMIT * 2 }) ?? []).map(
+      const items = [
+        ...((bibManager.fuse?.search(q, { limit: RESULT_LIMIT * 2 }) ?? []).map(
           (r) => r.item
-        )
-      );
+        )),
+        ...((scopedFuse?.search(q, { limit: RESULT_LIMIT * 2 }) ?? []).map(
+          (r) => r.item
+        )),
+      ];
+      const deduped = dedupeBibliographyEntries(items);
       this.results = deduped.slice(0, RESULT_LIMIT).map((item, i) => ({
         item,
         refIndex: i,

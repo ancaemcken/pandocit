@@ -15,6 +15,7 @@ import {
 import { parseBibTeXFilePaths } from './bibFilePdfLinks';
 import {
   PromiseCapability,
+  absolutePathToVaultRelative,
   copyElToClipboard,
   getVaultRoot,
 } from 'src/helpers';
@@ -65,10 +66,22 @@ export interface FileCache {
   settings: ScopedSettings | null;
 
   source: {
+    /** Cache global (fichier `pathToBibliography` ou bibliothèque Zotero). */
     bibCache?: Map<string, PartialCSLEntry>;
+    /** Fichier `bibliography` de la note (mode fusion). */
+    scopedBibCache?: Map<string, PartialCSLEntry>;
     fuse?: Fuse<PartialCSLEntry>;
+    /** Fuse du fichier `bibliography` de la note (mode fusion). */
+    scopedFuse?: Fuse<PartialCSLEntry>;
     engine?: any;
   };
+}
+
+/** Fichier `bibliography` de frontmatter analysé (cache par chemin résolu + mtime). */
+interface ScopedBibCacheEntry {
+  bibCache: Map<string, PartialCSLEntry>;
+  fuse: Fuse<PartialCSLEntry>;
+  mtime: number | null;
 }
 
 function getScopedSettings(file: TFile): ScopedSettings {
@@ -160,8 +173,8 @@ export class BibManager {
   bibCache: Map<string, PartialCSLEntry> = new Map();
   /** Clé API Zotero (8 car.) → id CSL / citekey (ne pas indexer dans bibCache). */
   citekeyAliases: Map<string, string> = new Map();
-  /** Chemins résolus des fichiers `bibliography` de frontmatter déjà chargés. */
-  frontmatterBibPaths: Set<string> = new Set();
+  /** Bibliographies scoped (frontmatter) analysées, indexées par chemin résolu du fichier. */
+  scopedBibFiles: Map<string, ScopedBibCacheEntry> = new Map();
   fuse: Fuse<PartialCSLEntry>;
   engine: any;
 
@@ -198,7 +211,7 @@ export class BibManager {
     this.styleCache.clear();
     this.bibCache.clear();
     this.citekeyAliases.clear();
-    this.frontmatterBibPaths.clear();
+    this.scopedBibFiles.clear();
     this.fuse = null;
     this.engine = null;
     this.plugin = null;
@@ -264,8 +277,9 @@ export class BibManager {
         await this.loadGlobalBibFile(true);
       }
 
-      // Restaure les bibliographies locales (frontmatter) dans le cache partagé.
-      await this.reloadFrontmatterBibliographies();
+      // Les bibliothèques scoped sont re-parsées à la prochaine ouverture de note
+      // (invalidées par mtime) : on vide simplement le cache pour un rechargement propre.
+      this.scopedBibFiles.clear();
 
       if (!this.engine && this.bibCache.size > 0) {
         await this.ensureGlobalEngine();
@@ -373,46 +387,88 @@ export class BibManager {
     }
   }
 
-  /** Fusionne des entrées dans le cache partagé (bibliothèque globale + frontmatter). */
-  private mergeIntoCache(bib: PartialCSLEntry[]): void {
-    for (const entry of bib) {
-      this.bibCache.set(entry.id, entry);
-    }
-    if (this.fuse) {
-      for (const entry of bib) {
-        this.fuse.add(entry);
-      }
-    } else {
-      this.fuse = new Fuse(Array.from(this.bibCache.values()), fuseSettings);
-    }
-  }
-
-  /** Mémorise le chemin (résolu) du fichier `bibliography` d'un frontmatter. */
-  private registerFrontmatterBibliography(bibPath: string): void {
+  /** Chemin canonique d'un fichier `bibliography` de frontmatter (clé du cache). */
+  private resolveScopedBibPath(bibPath: string): string {
     try {
-      this.frontmatterBibPaths.add(getBibPath(bibPath, getVaultRoot));
+      return getBibPath(bibPath, getVaultRoot);
     } catch {
-      this.frontmatterBibPaths.add(bibPath);
+      return bibPath;
     }
   }
 
-  /** Recharge les fichiers `bibliography` de frontmatter déjà rencontrés. */
-  async reloadFrontmatterBibliographies(): Promise<void> {
-    for (const bibPath of Array.from(this.frontmatterBibPaths)) {
-      try {
-        const bib = await bibToCSL(bibPath, getVaultRoot);
-        this.mergeIntoCache(bib);
-        await this.mergePdfLinksFromBibliographyFile(bibPath, {
-          replace: false,
-        });
-      } catch (e) {
-        console.error(
-          '[PandoCit] cannot reload frontmatter bibliography',
-          bibPath,
-          e
+  private scopedBibFileMtime(path: string): number | null {
+    try {
+      const file =
+        app.vault.getAbstractFileByPath(path) ??
+        app.vault.getAbstractFileByPath(
+          absolutePathToVaultRelative(path) ?? ''
         );
-      }
+      if (file instanceof TFile) return file.stat?.mtime ?? null;
+    } catch {
+      // ignore
     }
+    return null;
+  }
+
+  /** Analyse (et met en cache par chemin + mtime) le fichier `bibliography` d'un frontmatter. */
+  async getScopedBib(
+    resolvedPath: string
+  ): Promise<ScopedBibCacheEntry | null> {
+    const cached = this.scopedBibFiles.get(resolvedPath);
+    const mtime = this.scopedBibFileMtime(resolvedPath);
+    if (cached && (mtime == null || cached.mtime === mtime)) {
+      return cached;
+    }
+    const bib = await bibToCSL(resolvedPath, getVaultRoot);
+    const bibCache = new Map<string, PartialCSLEntry>();
+    for (const entry of bib) {
+      bibCache.set(entry.id, entry);
+    }
+    const entry: ScopedBibCacheEntry = {
+      bibCache,
+      fuse: new Fuse(bib, fuseSettings),
+      mtime,
+    };
+    this.scopedBibFiles.set(resolvedPath, entry);
+    return entry;
+  }
+
+  /** Vide le cache des bibliothèques scoped (re-parsées au prochain accès). */
+  clearScopedBibCache(): void {
+    this.scopedBibFiles.clear();
+  }
+
+  /** Entrées du fichier `bibliography` de frontmatter d'un fichier (cache par chemin). */
+  async getScopedEntriesForFile(
+    file: TFile
+  ): Promise<PartialCSLEntry[] | null> {
+    const settings = getScopedSettings(file);
+    if (!settings?.bibliography) return null;
+    try {
+      const entry = await this.getScopedBib(
+        this.resolveScopedBibPath(settings.bibliography)
+      );
+      return entry ? Array.from(entry.bibCache.values()) : null;
+    } catch (e) {
+      console.error('[PandoCit] cannot load scoped bibliography', e);
+      return null;
+    }
+  }
+
+  /** Résolution dans la source scoped + globale (fichier de la note, puis bibliothèque globale). */
+  private sourceHasEntry(key: string, source: FileCache['source']): boolean {
+    return !!this.resolveSourceId(key, source);
+  }
+
+  private resolveSourceId(
+    key: string,
+    source: FileCache['source']
+  ): string | undefined {
+    const k = key?.trim();
+    if (!k) return undefined;
+    const scoped = source?.scopedBibCache?.get(k);
+    if (scoped?.id) return scoped.id;
+    return this.resolveBibliographyId(k, source?.bibCache ?? this.bibCache);
   }
 
   async loadScopedEngine(settings: ScopedSettings) {
@@ -426,6 +482,8 @@ export class BibManager {
     let lang = pluginSettings.cslLang ?? 'en-US';
     let bibCache = this.bibCache;
     let fuse = this.fuse;
+    let scopedCache: Map<string, PartialCSLEntry> | null = null;
+    let scopedFuse: Fuse<PartialCSLEntry> | null = null;
     let langs = [settings.lang];
 
     if (settings.style) {
@@ -457,15 +515,22 @@ export class BibManager {
 
     if (settings.bibliography) {
       try {
-        const bib = await bibToCSL(settings.bibliography, getVaultRoot);
+        const scoped = await this.getScopedBib(
+          this.resolveScopedBibPath(settings.bibliography)
+        );
 
-        // Fusion avec la bibliographie globale : les citations de la note résolvent
-        // sur les deux sources (fichier global + fichier du frontmatter), et la liste
-        // de référence affiche les entrées citées des deux, sans doublons.
-        this.mergeIntoCache(bib);
-        bibCache = this.bibCache;
-        fuse = new Fuse(Array.from(bibCache.values()), fuseSettings);
-        this.registerFrontmatterBibliography(settings.bibliography);
+        if (scoped) {
+          if (this.plugin.settings.mergeScopedBibliography) {
+            // Couche « fichier de la note » par-dessus la bibliothèque globale/Zotero :
+            // recherche par couche dans le moteur, aucune copie du cache global.
+            scopedCache = scoped.bibCache;
+            scopedFuse = scoped.fuse;
+          } else {
+            // Comportement historique : seule la bibliographie de la note est utilisée.
+            bibCache = scoped.bibCache;
+            fuse = scoped.fuse;
+          }
+        }
 
         await this.mergePdfLinksFromBibliographyFile(settings.bibliography, {
           replace: false,
@@ -493,12 +558,15 @@ export class BibManager {
         this.langCache,
         styleKey,
         this.styleCache,
-        bibCache
+        bibCache,
+        scopedCache ?? undefined
       );
 
       return {
         bibCache,
+        scopedBibCache: scopedCache ?? undefined,
         fuse,
+        scopedFuse: scopedFuse ?? undefined,
         engine,
       };
     } catch (e) {
@@ -803,7 +871,8 @@ export class BibManager {
     langCache: Map<string, string>,
     style: string,
     styleCache: Map<string, string>,
-    bibCache: Map<string, PartialCSLEntry>
+    bibCache: Map<string, PartialCSLEntry>,
+    scopedCache?: Map<string, PartialCSLEntry>
   ) {
     const styleXML = styleCache.get(style);
     if (!styleXML) {
@@ -822,6 +891,12 @@ export class BibManager {
           return langCache.get(id);
         },
         retrieveItem: (id: string) => {
+          // Mode fusion : le fichier `bibliography` de la note prime, puis la
+          // bibliothèque globale/Zotero. Recherche par couche, aucune copie.
+          if (scopedCache) {
+            const scoped = scopedCache.get(id);
+            if (scoped?.id) return scoped;
+          }
           const canonical = this.resolveBibliographyId(id, bibCache);
           return canonical ? bibCache.get(canonical) : undefined;
         },
@@ -1042,7 +1117,7 @@ export class BibManager {
     }
 
     citeKeys.forEach((k) => {
-      if (this.hasBibliographyEntry(k, source.bibCache)) {
+      if (this.sourceHasEntry(k, source)) {
         resolvedKeys.add(k);
       } else {
         unresolvedKeys.add(k);
@@ -1051,7 +1126,7 @@ export class BibManager {
 
     const filtered = processed.filter((s) =>
       s.citations.every((c) => {
-        const resolved = this.hasBibliographyEntry(c.id, source.bibCache);
+        const resolved = this.sourceHasEntry(c.id, source);
         if (resolved) {
           resolvedKeys.add(c.id);
         } else {
@@ -1065,8 +1140,7 @@ export class BibManager {
       ...seg,
       citations: seg.citations.map((c) => ({
         ...c,
-        id:
-          this.resolveBibliographyId(c.id, source.bibCache) ?? c.id,
+        id: this.resolveSourceId(c.id, source) ?? c.id,
       })),
     }));
 

@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS: ReferenceListSettings = {
   openPdfLinksInNewTab: true,
   showCitekeyTooltips: true,
   underlineCitekeys: false,
+  mergeScopedBibliography: false,
   zoteroApiLibraryType: 'user',
   zoteroApiMergeGroupIds: [],
 };
@@ -54,6 +55,8 @@ export interface ReferenceListSettings {
   pluginUiLocale?: 'en' | 'fr' | 'de' | 'es';
 
   pathToBibliography?: string;
+  /** Fusionne le fichier `bibliography` de la note avec la bibliothèque globale/Zotero. */
+  mergeScopedBibliography?: boolean;
 
   cslStyleURL?: string;
   cslStylePath?: string;
@@ -260,6 +263,22 @@ export class ReferenceListSettingsTab extends PluginSettingTab {
           });
         });
       });
+
+    new Setting(containerEl)
+      .setName(t('Merge note bibliography with global library'))
+      .setDesc(
+        t(
+          'When enabled, citations in a note resolve against both the global/Zotero library and the note\'s bibliography file. When disabled, the note\'s bibliography replaces the global one for that note.'
+        )
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(!!this.plugin.settings.mergeScopedBibliography)
+          .onChange((value) => {
+            this.plugin.settings.mergeScopedBibliography = value;
+            this.plugin.saveSettings();
+          })
+      );
 
     ReactDOM.render(
       <ZoteroApiSetting plugin={this.plugin} />,

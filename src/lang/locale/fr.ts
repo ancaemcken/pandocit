@@ -45,6 +45,10 @@ export default {
   'The absolute path to your desired bibliography file. This can be overridden on a per-file basis by setting "bibliography" in the file\'s frontmatter.':
     'Chemin absolu vers votre fichier de bibliographie. Peut être surchargé par fichier avec « bibliography » dans les métadonnées.',
   'Select a bibliography file.': 'Choisir un fichier de bibliographie.',
+  'Merge note bibliography with global library':
+    'Fusionner la bibliographie de la note avec la bibliothèque globale',
+  "When enabled, citations in a note resolve against both the global/Zotero library and the note's bibliography file. When disabled, the note's bibliography replaces the global one for that note.":
+    "Quand activé, les citations d'une note sont résolues à la fois dans la bibliothèque globale/Zotero et dans le fichier « bibliography » de la note. Quand désactivé, la bibliographie de la note remplace la bibliothèque globale pour cette note.",
   'Custom citation style': 'Style de citation personnalisé',
   'Citation style': 'Style de citation',
   'Citation style language': 'Langue du style de citation',

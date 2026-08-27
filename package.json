@@ -68,6 +68,9 @@
   },
   "jest": {
     "transformIgnorePatterns": [],
-    "testEnvironment": "jsdom"
+    "testEnvironment": "jsdom",
+    "moduleNameMapper": {
+      "^obsidian$": "<rootDir>/test/mocks/obsidian.js"
+    }
   }
 }

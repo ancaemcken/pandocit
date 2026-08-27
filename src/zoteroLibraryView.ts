@@ -1,4 +1,4 @@
-import { Modal, Notice, Setting, setIcon } from 'obsidian';
+import { MarkdownView, Modal, Notice, Setting, setIcon } from 'obsidian';
 import Fuse from 'fuse.js';
 import { langListRaw } from './bib/cslLangList';
 import { matchStoredLanguageToCslLocale } from './bib/zoteroLangNormalize';
@@ -36,12 +36,13 @@ import {
 } from './annotations/annotationReference';
 import { buildAnnotationRowsFromSnapshot } from './annotations/zoteroAnnotationIndex';
 import type { ZoteroAnnotationRow } from './annotations/types';
-import { listBibliographyEntriesFromCache } from './bib/bibliographyEntries';
+import { listBibliographyEntriesFromCache, dedupeBibliographyEntries } from './bib/bibliographyEntries';
 import {
   bibFileAttachmentsFromPaths,
   bibliographyRowFromEntry,
   isBibliographyFileRow,
 } from './library/libraryBibRows';
+import type { PartialCSLEntry } from './bib/types';
 
 /** @deprecated Legacy view type — migrated to shell */
 export const zoteroLibraryViewType = 'pwc-zotero-library-view';
@@ -268,8 +269,8 @@ export class ZoteroLibraryPanel {
         } else {
           await this.plugin.bibManager.loadGlobalBibFile();
         }
-        // Recharge aussi les bibliographies locales (frontmatter) déjà chargées.
-        await this.plugin.bibManager.reloadFrontmatterBibliographies();
+        // Les bibliothèques scoped sont re-parsées au prochain accès (invalidées par mtime).
+        this.plugin.bibManager.clearScopedBibCache();
         this.plugin.bibManager.fileCache.clear();
         this.plugin.processReferences();
         await this.refreshList();
@@ -521,10 +522,14 @@ export class ZoteroLibraryPanel {
     }
   }
 
-  private appendBibliographyFileSection(hasZotero: boolean): void {
-    const entries = listBibliographyEntriesFromCache(
-      this.plugin.bibManager.bibCache
-    );
+  private appendBibliographyFileSection(
+    hasZotero: boolean,
+    scopedEntries: PartialCSLEntry[] = []
+  ): void {
+    const entries = dedupeBibliographyEntries([
+      ...listBibliographyEntriesFromCache(this.plugin.bibManager.bibCache),
+      ...scopedEntries,
+    ]);
     if (!entries.length) return;
 
     const zoteroCitekeys = new Set(
@@ -703,6 +708,19 @@ export class ZoteroLibraryPanel {
       !!this.plugin.settings.pathToBibliography?.trim() ||
       this.plugin.bibManager.bibCache.size > 0;
 
+    // Mode fusion : affiche aussi le fichier `bibliography` de la note active.
+    let scopedEntries: PartialCSLEntry[] = [];
+    if (this.plugin.settings.mergeScopedBibliography) {
+      const activeFile = this.plugin.app.workspace
+        .getActiveViewOfType(MarkdownView)
+        ?.file;
+      if (activeFile) {
+        scopedEntries =
+          (await this.plugin.bibManager.getScopedEntriesForFile(activeFile)) ??
+          [];
+      }
+    }
+
     this.flatRows = [];
     this.treeRoots = [];
     this.annRows = [];
@@ -732,7 +750,7 @@ export class ZoteroLibraryPanel {
         );
       }
       // Affiche quand même les entrées déjà en cache si le rechargement a échoué.
-      this.appendBibliographyFileSection(hasZotero);
+      this.appendBibliographyFileSection(hasZotero, scopedEntries);
     }
 
     this.fuse =
