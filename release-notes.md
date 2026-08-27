@@ -1,1 +1,1 @@
-d57de97 fix: Show scoped (frontmatter) bibliography in Library pane even when the pane is the active leaf or no global bib is set
+8630de0 feat: Library pane follows active note (active-leaf-change) when it has a scoped bibliography
