@@ -1,1 +1,2 @@
-9f440ad fix: When using Reload bibliography file, reload both local and global
+2eca95c fix: Show references list on mobile
+c156173 Add one-shot JS release script
