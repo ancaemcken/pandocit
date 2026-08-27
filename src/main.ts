@@ -7,6 +7,7 @@ import {
   Menu,
   Notice,
   Plugin,
+  TFile,
   WorkspaceLeaf,
   debounce,
   setIcon,
@@ -63,6 +64,8 @@ export default class ReferenceList extends Plugin {
   _initPromise: PromiseCapability<void>;
   pendingShellTab?: ShellTab;
   skipFileOpenRoute = false;
+  /** Dernier fichier markdown ouvert — utilisé quand le volet actif n'est pas un éditeur (ex. volet Bibliothèque). */
+  lastActiveMarkdownFile: TFile | null = null;
 
   get initPromise() {
     if (!this._initPromise) {
@@ -314,6 +317,16 @@ export default class ReferenceList extends Plugin {
           true
         )
       )
+    );
+
+    this.lastActiveMarkdownFile =
+      app.workspace.getActiveViewOfType(MarkdownView)?.file ?? null;
+    this.registerEvent(
+      app.workspace.on('file-open', (file) => {
+        if (file instanceof TFile && file.extension === 'md') {
+          this.lastActiveMarkdownFile = file;
+        }
+      })
     );
 
     (async () => {

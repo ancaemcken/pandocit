@@ -527,8 +527,9 @@ export class ZoteroLibraryPanel {
     scopedEntries: PartialCSLEntry[] = []
   ): void {
     const entries = dedupeBibliographyEntries([
-      ...listBibliographyEntriesFromCache(this.plugin.bibManager.bibCache),
+      // Le fichier de la note prime sur la bibliothèque globale (comme le moteur).
       ...scopedEntries,
+      ...listBibliographyEntriesFromCache(this.plugin.bibManager.bibCache),
     ]);
     if (!entries.length) return;
 
@@ -711,9 +712,12 @@ export class ZoteroLibraryPanel {
     // Mode fusion : affiche aussi le fichier `bibliography` de la note active.
     let scopedEntries: PartialCSLEntry[] = [];
     if (this.plugin.settings.mergeScopedBibliography) {
-      const activeFile = this.plugin.app.workspace
-        .getActiveViewOfType(MarkdownView)
-        ?.file;
+      // Le volet Bibliothèque peut être le leaf actif (clic sur « Recharger ») :
+      // dans ce cas getActiveViewOfType(MarkdownView) est null — on retombe sur
+      // la dernière note markdown ouverte.
+      const activeFile =
+        this.plugin.app.workspace.getActiveViewOfType(MarkdownView)?.file ??
+        this.plugin.lastActiveMarkdownFile;
       if (activeFile) {
         scopedEntries =
           (await this.plugin.bibManager.getScopedEntriesForFile(activeFile)) ??
@@ -731,7 +735,9 @@ export class ZoteroLibraryPanel {
       await this.loadZoteroLibraryData();
     }
 
-    if (hasBib) {
+    // Affiche le fichier `bibliography` de la note même sans bibliothèque globale
+    // (mode fusion, setup frontmatter-only).
+    if (hasBib || scopedEntries.length > 0) {
       const bibPath = this.plugin.settings.pathToBibliography?.trim();
       try {
         if (!hasZotero && bibPath) {

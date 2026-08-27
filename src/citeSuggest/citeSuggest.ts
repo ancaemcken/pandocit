@@ -91,10 +91,12 @@ export class CiteSuggest extends EditorSuggest<
     }) ?? [];
 
     if (scopedFuse) {
-      const scopedResults = scopedFuse.search(context.query, {
-        limit: this.limit,
-      }) ?? [];
-      results = dedupeResults([...results, ...scopedResults]).slice(
+      const scopedResults =
+        scopedFuse.search(context.query, {
+          limit: this.limit,
+        }) ?? [];
+      // Le fichier de la note prime sur la bibliothèque globale (comme le moteur).
+      results = dedupeResults([...scopedResults, ...results]).slice(
         0,
         this.limit
       );

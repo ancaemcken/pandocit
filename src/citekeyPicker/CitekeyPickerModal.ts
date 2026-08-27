@@ -125,9 +125,10 @@ export class CitekeyPickerModal extends Modal {
     }
 
     if (!q) {
+      // Le fichier de la note prime sur la bibliothèque globale (comme le moteur).
       const all = dedupeBibliographyEntries([
-        ...listBibliographyEntriesFromCache(bibManager.bibCache),
         ...scopedEntries,
+        ...listBibliographyEntriesFromCache(bibManager.bibCache),
       ]).sort((a, b) =>
         (a.title || a.id).localeCompare(b.title || b.id, undefined, {
           sensitivity: 'base',
@@ -139,10 +140,10 @@ export class CitekeyPickerModal extends Modal {
       })) as Fuse.FuseResult<PartialCSLEntry>[];
     } else {
       const items = [
-        ...((bibManager.fuse?.search(q, { limit: RESULT_LIMIT * 2 }) ?? []).map(
+        ...((scopedFuse?.search(q, { limit: RESULT_LIMIT * 2 }) ?? []).map(
           (r) => r.item
         )),
-        ...((scopedFuse?.search(q, { limit: RESULT_LIMIT * 2 }) ?? []).map(
+        ...((bibManager.fuse?.search(q, { limit: RESULT_LIMIT * 2 }) ?? []).map(
           (r) => r.item
         )),
       ];
