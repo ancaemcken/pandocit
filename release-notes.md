@@ -1,1 +1,1 @@
-3090774 feat: Optional merge of scoped and global bibliographies (layered cache)
+d57de97 fix: Show scoped (frontmatter) bibliography in Library pane even when the pane is the active leaf or no global bib is set
