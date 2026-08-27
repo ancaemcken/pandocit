@@ -268,6 +268,8 @@ export class ZoteroLibraryPanel {
         } else {
           await this.plugin.bibManager.loadGlobalBibFile();
         }
+        // Recharge aussi les bibliographies locales (frontmatter) déjà chargées.
+        await this.plugin.bibManager.reloadFrontmatterBibliographies();
         this.plugin.bibManager.fileCache.clear();
         this.plugin.processReferences();
         await this.refreshList();
@@ -506,7 +508,9 @@ export class ZoteroLibraryPanel {
 
   private updateLibraryModeUi(): void {
     const hasZotero = !!this.plugin.settings.pullFromZoteroApi;
-    const hasBib = !!this.plugin.settings.pathToBibliography?.trim();
+    const hasBib =
+      !!this.plugin.settings.pathToBibliography?.trim() ||
+      this.plugin.bibManager.bibCache.size > 0;
     this.syncBtn?.toggleClass('is-hidden', !hasZotero);
     this.importPdfBtn?.toggleClass('is-hidden', !hasZotero);
     this.bibExportBtn?.toggleClass('is-hidden', !hasZotero);

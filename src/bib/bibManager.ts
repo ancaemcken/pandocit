@@ -152,6 +152,8 @@ export class BibManager {
   bibCache: Map<string, PartialCSLEntry> = new Map();
   /** Clé API Zotero (8 car.) → id CSL / citekey (ne pas indexer dans bibCache). */
   citekeyAliases: Map<string, string> = new Map();
+  /** Chemins résolus des fichiers `bibliography` de frontmatter déjà chargés. */
+  frontmatterBibPaths: Set<string> = new Set();
   fuse: Fuse<PartialCSLEntry>;
   engine: any;
 
@@ -188,6 +190,7 @@ export class BibManager {
     this.styleCache.clear();
     this.bibCache.clear();
     this.citekeyAliases.clear();
+    this.frontmatterBibPaths.clear();
     this.fuse = null;
     this.engine = null;
     this.plugin = null;
@@ -355,6 +358,48 @@ export class BibManager {
     }
   }
 
+  /** Fusionne des entrées dans le cache partagé (bibliothèque globale + frontmatter). */
+  private mergeIntoCache(bib: PartialCSLEntry[]): void {
+    for (const entry of bib) {
+      this.bibCache.set(entry.id, entry);
+    }
+    if (this.fuse) {
+      for (const entry of bib) {
+        this.fuse.add(entry);
+      }
+    } else {
+      this.fuse = new Fuse(Array.from(this.bibCache.values()), fuseSettings);
+    }
+  }
+
+  /** Mémorise le chemin (résolu) du fichier `bibliography` d'un frontmatter. */
+  private registerFrontmatterBibliography(bibPath: string): void {
+    try {
+      this.frontmatterBibPaths.add(getBibPath(bibPath, getVaultRoot));
+    } catch {
+      this.frontmatterBibPaths.add(bibPath);
+    }
+  }
+
+  /** Recharge les fichiers `bibliography` de frontmatter déjà rencontrés. */
+  async reloadFrontmatterBibliographies(): Promise<void> {
+    for (const bibPath of Array.from(this.frontmatterBibPaths)) {
+      try {
+        const bib = await bibToCSL(bibPath, getVaultRoot);
+        this.mergeIntoCache(bib);
+        await this.mergePdfLinksFromBibliographyFile(bibPath, {
+          replace: false,
+        });
+      } catch (e) {
+        console.error(
+          '[PandoCit] cannot reload frontmatter bibliography',
+          bibPath,
+          e
+        );
+      }
+    }
+  }
+
   async loadScopedEngine(settings: ScopedSettings) {
     if (!settings) return this;
 
@@ -402,21 +447,10 @@ export class BibManager {
         // Fusion avec la bibliographie globale : les citations de la note résolvent
         // sur les deux sources (fichier global + fichier du frontmatter), et la liste
         // de référence affiche les entrées citées des deux, sans doublons.
-        for (const entry of bib) {
-          this.bibCache.set(entry.id, entry);
-        }
+        this.mergeIntoCache(bib);
         bibCache = this.bibCache;
-        if (this.fuse) {
-          for (const entry of bib) {
-            this.fuse.add(entry);
-          }
-        } else {
-          this.fuse = new Fuse(
-            Array.from(this.bibCache.values()),
-            fuseSettings
-          );
-        }
         fuse = new Fuse(Array.from(bibCache.values()), fuseSettings);
+        this.registerFrontmatterBibliography(settings.bibliography);
 
         await this.mergePdfLinksFromBibliographyFile(settings.bibliography, {
           replace: false,
