@@ -96,10 +96,18 @@ function getScopedSettings(file: TFile): ScopedSettings {
   }
 
   const pathApi = getPath();
-  const fsApi = getFs();
   const root = getVaultRoot();
-  if (root && output.bibliography && fsApi.existsSync(pathApi.join(root, pathApi.dirname(file.path), output.bibliography))) {
-    output.bibliography = pathApi.join(root, pathApi.dirname(file.path), output.bibliography);
+  if (output.bibliography && !pathApi.isAbsolute(output.bibliography)) {
+    // Chemin relatif : on privilégie un fichier à côté de la note, résolu en chemin
+    // absolu sur bureau et en chemin relatif au coffre sur mobile (adapter.read).
+    const noteRelative = pathApi
+      .join(pathApi.dirname(file.path), output.bibliography)
+      .replace(/\\/g, '/');
+    if (app.vault.getAbstractFileByPath(noteRelative)) {
+      output.bibliography = root
+        ? pathApi.join(root, noteRelative)
+        : noteRelative;
+    }
   }
 
   return output;
@@ -244,23 +252,30 @@ export class BibManager {
   async reinit(clearCache: boolean) {
     this.initPromise = new PromiseCapability();
     this.fileCache.clear();
-    if (clearCache) {
-      this.bibCache.clear();
-      this.citekeyAliases.clear();
-    }
+    try {
+      if (clearCache) {
+        this.bibCache.clear();
+        this.citekeyAliases.clear();
+      }
 
-    if (this.plugin.settings.pullFromZoteroApi) {
-      await this.loadGlobalZoteroApi();
-    } else {
-      await this.loadGlobalBibFile(true);
-    }
+      if (this.plugin.settings.pullFromZoteroApi) {
+        await this.loadGlobalZoteroApi();
+      } else {
+        await this.loadGlobalBibFile(true);
+      }
 
-    if (!this.engine && this.bibCache.size > 0) {
-      await this.ensureGlobalEngine();
-    }
+      // Restaure les bibliographies locales (frontmatter) dans le cache partagé.
+      await this.reloadFrontmatterBibliographies();
 
-    this.fileCache.clear();
-    this.initPromise.resolve();
+      if (!this.engine && this.bibCache.size > 0) {
+        await this.ensureGlobalEngine();
+      }
+
+      this.fileCache.clear();
+    } finally {
+      // Toujours résoudre : une erreur de chargement ne doit pas bloquer le plugin.
+      this.initPromise.resolve();
+    }
   }
 
   /** Reconstruit citeproc si le cache bibliographie est prêt mais pas le moteur. */
@@ -307,10 +322,10 @@ export class BibManager {
     const trimmed = bibPath?.trim();
     if (!trimmed) return;
 
-    const ext = getPath().extname(trimmed).toLowerCase();
-    if (ext !== '.bib' && ext !== '.bibtex') return;
-
     try {
+      const ext = getPath().extname(trimmed).toLowerCase();
+      if (ext !== '.bib' && ext !== '.bibtex') return;
+
       const contents = await readBibliographyFile(trimmed, getVaultRoot);
       const parsed = parseBibTeXFilePaths(contents);
 

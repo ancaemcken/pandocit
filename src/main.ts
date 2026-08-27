@@ -461,27 +461,14 @@ export default class ReferenceList extends Plugin {
             .setIcon('lucide-rotate-cw')
             .setTitle(t('Refresh bibliography'))
             .onClick(async () => {
-              const activeView =
-                this.app.workspace.getActiveViewOfType(MarkdownView);
-              if (activeView) {
-                const file = activeView.file;
-
-                if (this.bibManager.fileCache.has(file)) {
-                  const cache = this.bibManager.fileCache.get(file);
-                  if (cache.source !== this.bibManager) {
-                    this.bibManager.fileCache.delete(file);
-                    this.processReferences();
-                    return;
-                  }
-                }
-              }
-
               if (this.settings.pullFromZoteroApi) {
                 const r = await this.zoteroSync.sync();
                 noticeSyncResult(r, t);
                 await this.zoteroAnnotationIndex.refresh(this);
               }
 
+              // Recharge la bibliothèque globale (ou Zotero) puis les fichiers
+              // `bibliography` de frontmatter dans le cache partagé.
               this.bibManager.reinit(true);
               await this.bibManager.initPromise.promise;
               this.processReferences();

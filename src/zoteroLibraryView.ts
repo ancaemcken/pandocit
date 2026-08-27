@@ -715,14 +715,23 @@ export class ZoteroLibraryPanel {
 
     if (hasBib) {
       const bibPath = this.plugin.settings.pathToBibliography?.trim();
-      if (!hasZotero && bibPath) {
-        await this.plugin.bibManager.loadGlobalBibFile(true);
+      try {
+        if (!hasZotero && bibPath) {
+          await this.plugin.bibManager.loadGlobalBibFile(true);
+        }
+        if (bibPath) {
+          await this.plugin.bibManager.mergePdfLinksFromBibliographyFile(
+            bibPath,
+            { replace: !hasZotero }
+          );
+        }
+      } catch (e) {
+        console.error(
+          '[PandoCit] failed to reload bibliography for Library view',
+          e
+        );
       }
-      if (bibPath) {
-        await this.plugin.bibManager.mergePdfLinksFromBibliographyFile(bibPath, {
-          replace: !hasZotero,
-        });
-      }
+      // Affiche quand même les entrées déjà en cache si le rechargement a échoué.
       this.appendBibliographyFileSection(hasZotero);
     }
 

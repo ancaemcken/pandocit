@@ -8,6 +8,8 @@ export type PathLike = {
   join: (...segments: string[]) => string;
   dirname: (p: string) => string;
   parse: (p: string) => { root: string; dir: string; base: string; ext: string; name: string };
+  extname: (p: string) => string;
+  normalize: (p: string) => string;
   isAbsolute: (p: string) => boolean;
 };
 
@@ -32,6 +34,14 @@ function minimalPath(): PathLike {
         name: j < 0 ? base : base.slice(0, j),
       };
     },
+    extname: (p: string) => {
+      const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+      const base = i < 0 ? p : p.slice(i + 1);
+      const j = base.lastIndexOf('.');
+      return j <= 0 ? '' : base.slice(j);
+    },
+    normalize: (p: string) =>
+      p.replace(/\\/g, sep).replace(/\/+/g, sep).replace(/\/+$/, ''),
     isAbsolute: (p: string) => p.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(p),
   };
 }
