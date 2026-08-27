@@ -1,2 +1,1 @@
-2eca95c fix: Show references list on mobile
-c156173 Add one-shot JS release script
+3090774 feat: Optional merge of scoped and global bibliographies (layered cache)
