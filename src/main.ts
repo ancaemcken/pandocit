@@ -35,6 +35,7 @@ import { PromiseCapability, getVaultRoot } from './helpers';
 import { getPath } from './platformAdapter';
 import { BibManager } from './bib/bibManager';
 import { CiteSuggest } from './citeSuggest/citeSuggest';
+import { expandTransclusions } from './transclusions';
 import {
   PandoCitShellView,
   shellViewType,
@@ -596,7 +597,14 @@ export default class ReferenceList extends Plugin {
 
     if (activeView) {
       try {
-        const fileContent = await this.app.vault.cachedRead(activeView.file);
+        // Les citations des notes transcluses (`![[…]]`) sont traitées avec la note
+        // courante : on déplie récursivement les transclusions dans le contenu.
+        const raw = await this.app.vault.cachedRead(activeView.file);
+        const fileContent = await expandTransclusions(
+          this.app,
+          activeView.file,
+          raw
+        );
         const bib = await this.bibManager.getReferenceList(
           activeView.file,
           fileContent

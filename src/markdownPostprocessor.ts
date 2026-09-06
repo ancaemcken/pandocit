@@ -1,4 +1,4 @@
-import { MarkdownPostProcessorContext } from 'obsidian';
+import { MarkdownPostProcessorContext, MarkdownView } from 'obsidian';
 
 import ReferenceList from './main';
 import { Segment, SegmentType, getCitationSegments } from './parser/parser';
@@ -22,10 +22,33 @@ export function processCiteKeys(plugin: ReferenceList) {
     const walker = el.doc.createNodeIterator(el, NodeFilter.SHOW_TEXT);
     const sectionInfo = ctx.getSectionInfo(el);
 
-    if (!sectionInfo && !el.hasClass('markdown-preview-view')) return;
+    // Le contenu d'une transclusion (`![[…]]`) est rendu par Obsidian dans un
+    // sous-document dont `ctx.sourcePath` est la note embarquée (pas de section dans
+    // le document courant) : on retombe sur la note « hôte » pour résoudre et rendre
+    // les citations dans SON contexte (bibliographie fusionnée).
+    const isEmbedContent = !!el.closest?.('.markdown-embed');
+
+    if (
+      !sectionInfo &&
+      !el.hasClass('markdown-preview-view') &&
+      !isEmbedContent
+    ) {
+      return;
+    }
+
+    let sourcePath = ctx.sourcePath;
+    if (isEmbedContent && !plugin.bibManager.getCacheForPath(ctx.sourcePath)) {
+      const hostEl = el.closest?.(
+        '.markdown-preview-view[data-path], .markdown-source-view[data-path]'
+      );
+      const hostPath =
+        hostEl?.getAttribute('data-path') ||
+        plugin.app.workspace.getActiveViewOfType(MarkdownView)?.file?.path;
+      if (hostPath && hostPath !== ctx.sourcePath) sourcePath = hostPath;
+    }
 
     // We wont get a sectionInfo in print mode
-    const cache = plugin.bibManager.getCacheForPath(ctx.sourcePath);
+    const cache = plugin.bibManager.getCacheForPath(sourcePath);
     const allCitations = cache?.citations;
     if (!allCitations?.length) return;
 
@@ -77,7 +100,7 @@ export function processCiteKeys(plugin: ReferenceList) {
           const preCite = content.substring(pos, match[0].from);
           const attr: Record<string, string> = {
             'data-citekey': rendered.citations.map((c) => c.id).join('|'),
-            'data-source': ctx.sourcePath,
+            'data-source': sourcePath,
           };
 
           if (rendered.note) {
@@ -125,7 +148,7 @@ export function processCiteKeys(plugin: ReferenceList) {
           switch (part.type) {
             case SegmentType.key: {
               const { isResolved, isUnresolved } =
-                plugin.bibManager.getResolution(ctx.sourcePath, part.val) || {
+                plugin.bibManager.getResolution(sourcePath, part.val) || {
                   isResolved: false,
                   isUnresolved: false,
                 };
@@ -135,7 +158,7 @@ export function processCiteKeys(plugin: ReferenceList) {
                 text: part.val,
                 attr: {
                   'data-citekey': part.val,
-                  'data-source': ctx.sourcePath,
+                  'data-source': sourcePath,
                 },
               });
               plugin.tooltipManager.bindCitationInteraction(keySpan);
@@ -143,7 +166,7 @@ export function processCiteKeys(plugin: ReferenceList) {
             }
             case SegmentType.at: {
               const { isResolved, isUnresolved } =
-                plugin.bibManager.getResolution(ctx.sourcePath, next?.val) || {
+                plugin.bibManager.getResolution(sourcePath, next?.val) || {
                   isResolved: false,
                   isUnresolved: false,
                 };
