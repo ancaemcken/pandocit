@@ -1,1 +1,1 @@
-5a8ee72 feat: Expand transclusions so citations inside embedded notes are processed with the host note
+121acda fix: Format citations inside transcluded note content (reading mode + live preview)
