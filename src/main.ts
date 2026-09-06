@@ -17,6 +17,7 @@ import {
   citeKeyCacheField,
   citeKeyPlugin,
   bibManagerField,
+  citeEmbedObserverPlugin,
   editorTooltipHandler,
 } from './editorExtension';
 import { setPluginUiLocale, t } from './lang/helpers';
@@ -130,6 +131,7 @@ export default class ReferenceList extends Plugin {
       bibManagerField.init(() => this.bibManager),
       citeKeyCacheField,
       citeKeyPlugin,
+      citeEmbedObserverPlugin,
       editorTooltipHandler(this.tooltipManager),
     ]);
 

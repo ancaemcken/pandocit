@@ -28,6 +28,7 @@ import { BibManager, FileCache } from './bib/bibManager';
 import equal from 'fast-deep-equal';
 import { TooltipManager } from './tooltip';
 import { citationInsideInlineFootnote } from './footnoteUtils';
+import { formatEmbeddedCitations } from './markdownPostprocessor';
 
 const ignoreListRegEx = /code|math|templater|hashtag/;
 
@@ -448,3 +449,64 @@ export const bibManagerField = StateField.define<BibManager>({
     return state;
   },
 });
+
+/**
+ * Live preview : le contenu transclus (`![[…]]`) est rendu par Obsidian dans un widget
+ * DOM hors du buffer de l'éditeur — hors de portée des décorations CodeMirror. On
+ * observe le DOM de l'éditeur et on formate les citations du contenu des embeds avec
+ * la bibliographie de la note en cours d'édition.
+ */
+class CiteEmbedObserverPlugin {
+  private observer: MutationObserver;
+  private timer = 0;
+
+  constructor(private view: EditorView) {
+    this.observer = new MutationObserver(() => this.schedule());
+    this.observer.observe(view.dom, { childList: true, subtree: true });
+    this.schedule();
+  }
+
+  update(update: ViewUpdate) {
+    // Le cache citeproc de la note arrive/disparaît via un effet : on reformate les
+    // embeds au cas où le passage précédent n'avait pas encore de cache.
+    if (
+      update.transactions.some((tr) =>
+        tr.effects.some((e) => e.is(setCiteKeyCache))
+      )
+    ) {
+      this.schedule();
+    }
+  }
+
+  private schedule() {
+    clearTimeout(this.timer);
+    this.timer = (
+      typeof activeWindow !== 'undefined' ? activeWindow : window
+    ).setTimeout(() => this.format(), 120);
+  }
+
+  private format() {
+    const bibManager = this.view.state.field(bibManagerField);
+    const obsView = this.view.state.field(editorInfoField);
+    const file = obsView?.file;
+    if (!bibManager || !file) return;
+    if (
+      !this.view.state.field(editorLivePreviewField) ||
+      !bibManager.plugin.settings.renderCitations
+    ) {
+      return;
+    }
+    // Aperçu « joli » : même règle que les citations de la note (renderCitations).
+    formatEmbeddedCitations(bibManager.plugin, this.view.dom, file.path, true);
+  }
+
+  destroy() {
+    this.observer.disconnect();
+    clearTimeout(this.timer);
+  }
+}
+
+export const citeEmbedObserverPlugin = ViewPlugin.fromClass(
+  CiteEmbedObserverPlugin,
+  { decorations: () => Decoration.none }
+);
