@@ -312,7 +312,7 @@ export default class ReferenceList extends Plugin {
                   if (
                     !this.settings.pullFromZoteroApi &&
                     this.settings.mergeScopedBibliography &&
-                    this.bibManager.hasFrontmatterBibliography(leaf.view.file)
+                    this.bibManager.hasContextBibliography(leaf.view.file)
                   ) {
                     void this.shell?.zoteroPanel?.refreshList();
                   }
@@ -580,7 +580,7 @@ export default class ReferenceList extends Plugin {
     const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
     const hasFrontmatterBib =
       !!activeView?.file &&
-      this.bibManager.hasFrontmatterBibliography(activeView.file);
+      this.bibManager.hasContextBibliography(activeView.file);
 
     if (
       !settings.pathToBibliography &&

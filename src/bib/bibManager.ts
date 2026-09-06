@@ -64,6 +64,8 @@ export interface FileCache {
   citeBibMap: Map<string, string>;
 
   settings: ScopedSettings | null;
+  /** Signature du contexte (bibliographie propre + bibliographies des notes transcluses). */
+  contextSignature?: string;
 
   source: {
     /** Cache global (fichier `pathToBibliography` ou bibliothèque Zotero). */
@@ -124,6 +126,42 @@ function getScopedSettings(file: TFile): ScopedSettings {
   }
 
   return output;
+}
+
+/**
+ * Valeurs `bibliography` (frontmatter) des notes markdown transcluses dans `file`,
+ * récursivement et sans revisiter un fichier déjà parcouru (anti-cycle).
+ */
+function embeddedBibliographyPaths(root: TFile): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>([root.path]);
+  const visit = (file: TFile): void => {
+    let embeds;
+    try {
+      embeds = app.metadataCache.getFileCache(file)?.embeds;
+    } catch {
+      embeds = undefined;
+    }
+    if (!embeds?.length) return;
+    for (const embed of embeds) {
+      const link = embed.link?.split('#')[0]?.trim();
+      if (!link) continue;
+      let dest: TFile | null = null;
+      try {
+        const hit = app.metadataCache.getFirstLinkpathDest(link, file.path);
+        if (hit instanceof TFile && hit.extension === 'md') dest = hit;
+      } catch {
+        continue;
+      }
+      if (!dest || seen.has(dest.path)) continue;
+      seen.add(dest.path);
+      const s = getScopedSettings(dest);
+      if (s?.bibliography) out.push(s.bibliography);
+      visit(dest);
+    }
+  };
+  visit(root);
+  return out;
 }
 
 function extractRawLocales(style: string, localeName?: string) {
@@ -241,6 +279,17 @@ export class BibManager {
   /** Vrai si le fichier déclare une bibliographie (clé `bibliography`) en frontmatter. */
   hasFrontmatterBibliography(file: TFile): boolean {
     return !!getScopedSettings(file)?.bibliography;
+  }
+
+  /** Vrai si la note — ou, en mode fusion, une note transcluse — apporte une bibliographie. */
+  hasContextBibliography(file: TFile): boolean {
+    if (this.hasFrontmatterBibliography(file)) return true;
+    if (!this.plugin.settings.mergeScopedBibliography) return false;
+    try {
+      return embeddedBibliographyPaths(file).length > 0;
+    } catch {
+      return false;
+    }
   }
 
   registerBibliographyEntry(
@@ -438,21 +487,79 @@ export class BibManager {
     this.scopedBibFiles.clear();
   }
 
-  /** Entrées du fichier `bibliography` de frontmatter d'un fichier (cache par chemin). */
+  /**
+   * Entrées du contexte scoped du fichier : sa bibliographie + celles des notes
+   * transcluses (mode fusion), avec la même priorité que le moteur. Null si aucune.
+   */
   async getScopedEntriesForFile(
     file: TFile
   ): Promise<PartialCSLEntry[] | null> {
-    const settings = getScopedSettings(file);
-    if (!settings?.bibliography) return null;
     try {
-      const entry = await this.getScopedBib(
-        this.resolveScopedBibPath(settings.bibliography)
-      );
-      return entry ? Array.from(entry.bibCache.values()) : null;
+      const ctx = await this.resolveScopedContext(getScopedSettings(file), file);
+      return ctx ? Array.from(ctx.bibCache.values()) : null;
     } catch (e) {
       console.error('[PandoCit] cannot load scoped bibliography', e);
       return null;
     }
+  }
+
+  /**
+   * Construit la couche scoped du contexte d'une note : sa propre bibliographie puis
+   * celles des notes transcluses (mode fusion). Ordre d'insertion = priorité : la note
+   * courante l'emporte, puis la première transclusion rencontrée. Sans transclusion,
+   * renvoie le cache par chemin tel quel (zéro copie).
+   */
+  private async resolveScopedContext(
+    settings: ScopedSettings | null,
+    contextFile?: TFile
+  ): Promise<{
+    bibCache: Map<string, PartialCSLEntry>;
+    fuse: Fuse<PartialCSLEntry>;
+  } | null> {
+    const merge = this.plugin.settings.mergeScopedBibliography;
+    const layers: ScopedBibCacheEntry[] = [];
+
+    if (settings?.bibliography) {
+      // Peut lever : la note courante doit rester en échec visible (fallback global).
+      const own = await this.getScopedBib(
+        this.resolveScopedBibPath(settings.bibliography)
+      );
+      if (own) layers.push(own);
+    }
+
+    if (merge && contextFile) {
+      const ownResolved = layers.length
+        ? this.resolveScopedBibPath(settings!.bibliography!)
+        : null;
+      const seenBib = new Set<string>(ownResolved ? [ownResolved] : []);
+      for (const bibPath of embeddedBibliographyPaths(contextFile)) {
+        const rp = this.resolveScopedBibPath(bibPath);
+        if (seenBib.has(rp)) continue;
+        seenBib.add(rp);
+        try {
+          const layer = await this.getScopedBib(rp);
+          if (layer) layers.push(layer);
+        } catch (e) {
+          // Une transclusion en échec ne bloque pas la note courante.
+          console.error('[PandoCit] cannot load embedded bibliography', rp, e);
+        }
+      }
+    }
+
+    if (!layers.length) return null;
+    if (layers.length === 1) {
+      return { bibCache: layers[0].bibCache, fuse: layers[0].fuse };
+    }
+    const bibCache = new Map<string, PartialCSLEntry>();
+    for (const layer of layers) {
+      for (const [id, entry] of layer.bibCache) {
+        if (!bibCache.has(id)) bibCache.set(id, entry);
+      }
+    }
+    return {
+      bibCache,
+      fuse: new Fuse(Array.from(bibCache.values()), fuseSettings),
+    };
   }
 
   /** Résolution dans la source scoped + globale (fichier de la note, puis bibliothèque globale). */
@@ -471,8 +578,11 @@ export class BibManager {
     return this.resolveBibliographyId(k, source?.bibCache ?? this.bibCache);
   }
 
-  async loadScopedEngine(settings: ScopedSettings) {
-    if (!settings) return this;
+  async loadScopedEngine(settings: ScopedSettings, contextFile?: TFile) {
+    const mergeContext =
+      this.plugin.settings.mergeScopedBibliography && !!contextFile;
+    const scopedSettings = settings ?? ({} as ScopedSettings);
+    if (!settings && !mergeContext) return this;
 
     const pluginSettings = this.plugin.settings;
     let style =
@@ -484,57 +594,63 @@ export class BibManager {
     let fuse = this.fuse;
     let scopedCache: Map<string, PartialCSLEntry> | null = null;
     let scopedFuse: Fuse<PartialCSLEntry> | null = null;
-    let langs = [settings.lang];
+    let langs = [scopedSettings.lang];
 
-    if (settings.style) {
+    if (scopedSettings.style) {
       try {
-        const isURL = /^http/.test(settings.style);
+        const isURL = /^http/.test(scopedSettings.style);
         const styleObj = isURL
-          ? { id: settings.style }
-          : { id: settings.style, explicitPath: settings.style };
+          ? { id: scopedSettings.style }
+          : { id: scopedSettings.style, explicitPath: scopedSettings.style };
         const styles = await this.loadStyles([styleObj]);
         for (const styleStr of styles) {
-          langs = extractRawLocales(styleStr, settings.lang);
+          langs = extractRawLocales(styleStr, scopedSettings.lang);
         }
-        style = settings.style;
+        style = scopedSettings.style;
       } catch (e) {
         console.error(e);
         return this;
       }
     }
 
-    if (settings.lang) {
+    if (scopedSettings.lang) {
       try {
         await this.loadLangs(langs);
-        lang = settings.lang;
+        lang = scopedSettings.lang;
       } catch (e) {
         console.error(e);
         return this;
       }
     }
 
-    if (settings.bibliography) {
+    if (scopedSettings.bibliography || mergeContext) {
       try {
-        const scoped = await this.getScopedBib(
-          this.resolveScopedBibPath(settings.bibliography)
-        );
-
-        if (scoped) {
-          if (this.plugin.settings.mergeScopedBibliography) {
-            // Couche « fichier de la note » par-dessus la bibliothèque globale/Zotero :
-            // recherche par couche dans le moteur, aucune copie du cache global.
-            scopedCache = scoped.bibCache;
-            scopedFuse = scoped.fuse;
-          } else {
+        if (this.plugin.settings.mergeScopedBibliography) {
+          // Couche « contexte de la note » (bibliographie propre + notes transcluses)
+          // par-dessus la bibliothèque globale/Zotero : recherche par couche dans le
+          // moteur, aucune copie du cache global.
+          const ctx = await this.resolveScopedContext(settings, contextFile);
+          if (ctx) {
+            scopedCache = ctx.bibCache;
+            scopedFuse = ctx.fuse;
+          }
+        } else if (scopedSettings.bibliography) {
+          const scoped = await this.getScopedBib(
+            this.resolveScopedBibPath(scopedSettings.bibliography)
+          );
+          if (scoped) {
             // Comportement historique : seule la bibliographie de la note est utilisée.
             bibCache = scoped.bibCache;
             fuse = scoped.fuse;
           }
         }
 
-        await this.mergePdfLinksFromBibliographyFile(settings.bibliography, {
-          replace: false,
-        });
+        if (scopedSettings.bibliography) {
+          await this.mergePdfLinksFromBibliographyFile(
+            scopedSettings.bibliography,
+            { replace: false }
+          );
+        }
       } catch (e) {
         console.error(e);
         return this;
@@ -1026,6 +1142,14 @@ export class BibManager {
       : null;
     const citeBibMap = new Map<string, string>();
     const settings = getScopedSettings(file);
+    // Invalide le cache source quand le contexte change : bibliographie propre et
+    // bibliographies des notes transcluses (mode fusion).
+    const contextSignature = this.plugin.settings.mergeScopedBibliography
+      ? JSON.stringify([
+          settings?.bibliography ?? '',
+          ...embeddedBibliographyPaths(file),
+        ])
+      : JSON.stringify([settings?.bibliography ?? '']);
 
     processed.forEach((p) =>
       p.citations.forEach((c) => {
@@ -1038,7 +1162,8 @@ export class BibManager {
     const areSettingsEqual =
       settings?.bibliography === cachedDoc?.settings?.bibliography &&
       settings?.style === cachedDoc?.settings?.style &&
-      settings?.lang === cachedDoc?.settings?.lang;
+      settings?.lang === cachedDoc?.settings?.lang &&
+      contextSignature === cachedDoc?.contextSignature;
 
     if (!areSettingsEqual && cachedDoc?.settings?.bibliography) {
       this.clearWatcher(cachedDoc.settings.bibliography);
@@ -1047,7 +1172,7 @@ export class BibManager {
     let source =
       cachedDoc?.source && areSettingsEqual
         ? cachedDoc.source
-        : await this.loadScopedEngine(settings);
+        : await this.loadScopedEngine(settings, file);
 
     // Un échec de chargement du fichier `bibliography` du frontmatter ne doit pas
     // rester bloqué sur la bibliographie globale : on ne mémorise pas ces settings,
@@ -1103,6 +1228,7 @@ export class BibManager {
         citations: [],
         citeBibMap,
         settings: null,
+        contextSignature,
         source,
       };
 
@@ -1201,6 +1327,7 @@ export class BibManager {
       citations,
       citeBibMap,
       settings: scopedFailed ? null : settings,
+      contextSignature,
       source,
     };
 
