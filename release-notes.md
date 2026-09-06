@@ -1,1 +1,1 @@
-045e4f5 feat: Merge bibliographies of transcluded notes into the active note's bib (merge mode)
+5a8ee72 feat: Expand transclusions so citations inside embedded notes are processed with the host note
