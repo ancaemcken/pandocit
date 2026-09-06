@@ -1,1 +1,1 @@
-8630de0 feat: Library pane follows active note (active-leaf-change) when it has a scoped bibliography
+045e4f5 feat: Merge bibliographies of transcluded notes into the active note's bib (merge mode)
