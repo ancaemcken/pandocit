@@ -3,6 +3,7 @@ import CSL from 'citeproc';
 import ReferenceList from 'src/main';
 import { PartialCSLEntry } from './types';
 import Fuse from 'fuse.js';
+import { wikilinkLinktext } from './wikilink';
 import {
   bibToCSL,
   getBibPath,
@@ -112,16 +113,33 @@ function getScopedSettings(file: TFile): ScopedSettings {
 
   const pathApi = getPath();
   const root = getVaultRoot();
-  if (output.bibliography && !pathApi.isAbsolute(output.bibliography)) {
-    // Chemin relatif : on privilégie un fichier à côté de la note, résolu en chemin
-    // absolu sur bureau et en chemin relatif au coffre sur mobile (adapter.read).
-    const noteRelative = pathApi
-      .join(pathApi.dirname(file.path), output.bibliography)
-      .replace(/\\/g, '/');
-    if (app.vault.getAbstractFileByPath(noteRelative)) {
-      output.bibliography = root
-        ? pathApi.join(root, noteRelative)
-        : noteRelative;
+
+  if (output.bibliography) {
+    // Wikilink Obsidian (`[[chemin/vers/fichier.json]]`) : on résout via l'index des
+    // liens (comme l'autocomplétion de l'éditeur) vers le chemin vault-relative, qui
+    // est canonique — on évite donc la résolution « à côté de la note » ci-dessous.
+    const link = wikilinkLinktext(output.bibliography);
+    if (link) {
+      try {
+        const dest = app.metadataCache.getFirstLinkpathDest(link, file.path);
+        if (dest instanceof TFile && dest.path) {
+          output.bibliography = dest.path;
+          return output;
+        }
+      } catch {
+        // cible introuvable : on laisse la valeur telle quelle (erreur au chargement)
+      }
+    } else if (!pathApi.isAbsolute(output.bibliography)) {
+      // Chemin relatif : on privilégie un fichier à côté de la note, résolu en chemin
+      // absolu sur bureau et en chemin relatif au coffre sur mobile (adapter.read).
+      const noteRelative = pathApi
+        .join(pathApi.dirname(file.path), output.bibliography)
+        .replace(/\\/g, '/');
+      if (app.vault.getAbstractFileByPath(noteRelative)) {
+        output.bibliography = root
+          ? pathApi.join(root, noteRelative)
+          : noteRelative;
+      }
     }
   }
 
