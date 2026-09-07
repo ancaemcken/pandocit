@@ -1,1 +1,1 @@
-121acda fix: Format citations inside transcluded note content (reading mode + live preview)
+28f8d66 feat: Support Obsidian wikilink ([[…]]) as bibliography path in frontmatter
