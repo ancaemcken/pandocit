@@ -1,4 +1,8 @@
-export type ShellTab = 'references' | 'zotero' | 'document-annotations';
+export type ShellTab =
+  | 'references'
+  | 'zotero'
+  | 'document-annotations'
+  | 'unused';
 
 export const shellViewType = 'pwc-shell-view';
 

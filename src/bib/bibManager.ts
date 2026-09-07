@@ -580,6 +580,43 @@ export class BibManager {
     };
   }
 
+  /**
+   * Entrées du fichier `bibliography` (frontmatter) de LA note — fichiers transclus
+   * exclus — qui ne sont citées nulle part dans le texte de cette note (transclusions
+   * exclues). Retourne null si la note ne déclare pas de fichier local.
+   */
+  async getUnusedScopedEntriesForFile(
+    file: TFile
+  ): Promise<PartialCSLEntry[] | null> {
+    const settings = getScopedSettings(file);
+    if (!settings?.bibliography) return null;
+
+    const cache = await this.getScopedBib(
+      this.resolveScopedBibPath(settings.bibliography)
+    );
+    if (!cache) return null;
+
+    const content = await this.plugin.app.vault.cachedRead(file);
+    const used = new Set<string>();
+    const groups = getCitationSegments(
+      content,
+      !this.plugin.settings.renderLinkCitations
+    );
+    for (const segs of groups) {
+      const group = getCitations(segs);
+      for (const c of group.citations) {
+        const id = c.id?.trim();
+        if (id) used.add(id);
+      }
+    }
+
+    const out: PartialCSLEntry[] = [];
+    for (const e of cache.bibCache.values()) {
+      if (e?.id && !used.has(e.id)) out.push(e);
+    }
+    return out;
+  }
+
   /** Résolution dans la source scoped + globale (fichier de la note, puis bibliothèque globale). */
   private sourceHasEntry(key: string, source: FileCache['source']): boolean {
     return !!this.resolveSourceId(key, source);

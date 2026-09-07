@@ -511,3 +511,66 @@ export async function getItemJSONFromCiteKeys(
     return null;
   }
 }
+
+/**
+ * URI `zotero://select/items/@<libraryID>_<key>` pour un citekey local, via Better
+ * BibTeX (desktop). Retourne null si Zotero/BBT n'est pas joignable ou introuvable.
+ */
+export async function zoteroItemSelectUri(
+  port: string,
+  citekey: string
+): Promise<string | null> {
+  if (!isDesktop() || !citekey?.trim()) return null;
+  if (!(await isZoteroRunning(port))) return null;
+  try {
+    const groups = (await getZUserGroups(port)) as { id: number; name: string }[];
+    const libId =
+      groups?.find((g) => g.name === 'My Library')?.id ?? groups?.[0]?.id;
+    if (libId == null) return null;
+
+    const request = require('http').request;
+    const body = JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'item.search',
+      params: [[[['citation-key', 'is', citekey.trim()]]], libId],
+    });
+
+    const output = await new Promise<string>((res, rej) => {
+      const postRequest = request(
+        {
+          host: '127.0.0.1',
+          port: port,
+          path: '/better-bibtex/json-rpc',
+          method: 'POST',
+          headers: {
+            ...defaultHeaders,
+            'Content-Length': Buffer.byteLength(body),
+          },
+        },
+        (result: any) => {
+          let str = '';
+          result.setEncoding('utf8');
+          result.on('data', (c: string) => (str += c));
+          result.on('error', (e: Error) => rej(e));
+          result.on('end', () => res(str));
+        }
+      );
+      postRequest.write(body);
+      postRequest.end();
+    });
+
+    const parsed = JSON.parse(output);
+    const items = Array.isArray(parsed?.result) ? parsed.result : [];
+    const first = items[0] ?? null;
+    const key =
+      (first && typeof first === 'object'
+        ? (first as { key?: string; itemKey?: string }).key ??
+          (first as { itemKey?: string }).itemKey
+        : undefined) ?? null;
+    if (!key) return null;
+    return `zotero://select/items/@${libId}_${key}`;
+  } catch (e) {
+    console.warn('[PandoCit] zoteroItemSelectUri', e);
+    return null;
+  }
+}

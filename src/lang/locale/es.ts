@@ -99,8 +99,14 @@ export default {
   'Copy list': 'Copiar lista',
   'No citations found in the current document.':
     'No hay citas en el documento actual.',
-  References: 'Referencias',
-  Library: 'Biblioteca',
+  'References': 'Referencias',
+  'Unused references': 'Referencias no utilizadas',
+  'No unused references': 'Sin referencias no utilizadas',
+  'This note has no bibliography file':
+    'Esta nota no tiene un archivo de bibliografía',
+  'Could not open in Zotero': 'No se pudo abrir en Zotero',
+  'Open URL': 'Abrir URL',
+  'Library': 'Biblioteca',
   Annotations: 'Anotaciones',
   'Bibliography file': 'Archivo de bibliografía',
   'Reload bibliography file': 'Recargar archivo de bibliografía',

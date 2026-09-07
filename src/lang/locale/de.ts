@@ -100,6 +100,12 @@ export default {
   'No citations found in the current document.':
     'Keine Zitate im aktuellen Dokument.',
   References: 'Literatur',
+  'Unused references': 'Unbenutzte Referenzen',
+  'No unused references': 'Keine unbenutzten Referenzen',
+  'This note has no bibliography file':
+    'Diese Notiz hat keine Bibliografiedatei',
+  'Could not open in Zotero': 'In Zotero nicht zu öffnen',
+  'Open URL': 'URL öffnen',
   Library: 'Bibliothek',
   Annotations: 'Anmerkungen',
   'Bibliography file': 'Bibliografiedatei',

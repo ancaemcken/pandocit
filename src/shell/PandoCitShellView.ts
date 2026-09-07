@@ -5,6 +5,7 @@ import type ReferenceList from '../main';
 import { ZoteroLibraryPanel } from '../zoteroLibraryView';
 import { ReferenceListPanel } from './ReferenceListPanel';
 import { DocumentAnnotationsPanel } from './DocumentAnnotationsPanel';
+import { UnusedReferencesPanel } from './UnusedReferencesPanel';
 import { shellViewType } from './types';
 import type { ShellTab } from './types';
 
@@ -13,6 +14,7 @@ export { shellViewType };
 const SHELL_TABS: ShellTab[] = [
   'references',
   'zotero',
+  'unused',
   'document-annotations',
 ];
 
@@ -22,6 +24,7 @@ const NARROW_SHELL_WIDTH = 230;
 const SHELL_TAB_ICONS: Record<ShellTab, string> = {
   references: 'quote-glyph',
   zotero: 'library',
+  unused: 'lucide-filter',
   'document-annotations': 'highlighter',
 };
 
@@ -35,6 +38,7 @@ export class PandoCitShellView extends ItemView {
   refsPanel: ReferenceListPanel;
   zoteroPanel: ZoteroLibraryPanel | null = null;
   docPanel: DocumentAnnotationsPanel | null = null;
+  unusedPanel: UnusedReferencesPanel | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: ReferenceList) {
     super(leaf);
@@ -88,6 +92,8 @@ export class PandoCitShellView extends ItemView {
         return t('References');
       case 'zotero':
         return t('Library');
+      case 'unused':
+        return t('Unused references');
       case 'document-annotations':
         return t('Annotations');
     }
@@ -148,16 +154,25 @@ export class PandoCitShellView extends ItemView {
         this.plugin
       );
     }
+    if (tab === 'unused' && !this.unusedPanel) {
+      this.unusedPanel = new UnusedReferencesPanel(
+        this.panelHosts.get('unused')!,
+        this.plugin
+      );
+    }
     if (tab === 'zotero') void this.zoteroPanel?.refreshList();
     if (tab === 'document-annotations') this.docPanel?.render();
+    if (tab === 'unused') void this.unusedPanel?.refresh();
   }
 
   async onOpen(): Promise<void> {
     if (this.activeTab === 'zotero') await this.zoteroPanel?.refreshList();
+    if (this.activeTab === 'unused') void this.unusedPanel?.refresh();
   }
 
   async onClose(): Promise<void> {
     this.narrowObserver?.disconnect();
     this.narrowObserver = null;
+    this.unusedPanel?.destroy();
   }
 }
