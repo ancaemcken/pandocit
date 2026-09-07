@@ -1,1 +1,1 @@
-28f8d66 feat: Support Obsidian wikilink ([[…]]) as bibliography path in frontmatter
+3f750da feat: 'Unused references' tab — unused entries of the active note's local bib with URL + Zotero links
