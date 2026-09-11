@@ -8,6 +8,7 @@ import { DocumentAnnotationsPanel } from './DocumentAnnotationsPanel';
 import { UnusedReferencesPanel } from './UnusedReferencesPanel';
 import { shellViewType } from './types';
 import type { ShellTab } from './types';
+import { parseBibliographyPaths } from '../bib/bibPaths';
 
 export { shellViewType };
 
@@ -133,7 +134,8 @@ export class PandoCitShellView extends ItemView {
     if (tab === 'zotero' && !this.zoteroPanel) {
       const hasLibrary =
         !!this.plugin.settings.pullFromZoteroApi ||
-        !!this.plugin.settings.pathToBibliography?.trim() ||
+        parseBibliographyPaths(this.plugin.settings.pathToBibliography).length >
+          0 ||
         this.plugin.bibManager.bibCache.size > 0;
       const host = this.panelHosts.get('zotero')!;
       if (!hasLibrary) {

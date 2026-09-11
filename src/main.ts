@@ -37,6 +37,7 @@ import { getPath } from './platformAdapter';
 import { BibManager } from './bib/bibManager';
 import { CiteSuggest } from './citeSuggest/citeSuggest';
 import { expandTransclusions } from './transclusions';
+import { parseBibliographyPaths } from './bib/bibPaths';
 import {
   PandoCitShellView,
   shellViewType,
@@ -586,7 +587,7 @@ export default class ReferenceList extends Plugin {
       this.bibManager.hasContextBibliography(activeView.file);
 
     if (
-      !settings.pathToBibliography &&
+      parseBibliographyPaths(settings.pathToBibliography).length === 0 &&
       !settings.pullFromZoteroApi &&
       !hasFrontmatterBib
     ) {

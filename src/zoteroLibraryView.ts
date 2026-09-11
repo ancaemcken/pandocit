@@ -40,6 +40,7 @@ import {
 import { buildAnnotationRowsFromSnapshot } from './annotations/zoteroAnnotationIndex';
 import type { ZoteroAnnotationRow } from './annotations/types';
 import { listBibliographyEntriesFromCache, dedupeBibliographyEntries } from './bib/bibliographyEntries';
+import { parseBibliographyPaths } from './bib/bibPaths';
 import {
   bibFileAttachmentsFromPaths,
   bibliographyRowFromEntry,
@@ -261,13 +262,14 @@ export class ZoteroLibraryPanel {
     this.reloadBibBtn.addEventListener('click', async () => {
       this.reloadBibBtn.disabled = true;
       try {
-        const bibPath = this.plugin.settings.pathToBibliography?.trim();
+        const bibPaths = parseBibliographyPaths(
+          this.plugin.settings.pathToBibliography
+        );
         if (this.plugin.settings.pullFromZoteroApi) {
-          if (bibPath) {
-            await this.plugin.bibManager.mergePdfLinksFromBibliographyFile(
-              bibPath,
-              { replace: true }
-            );
+          for (const p of bibPaths) {
+            await this.plugin.bibManager.mergePdfLinksFromBibliographyFile(p, {
+              replace: true,
+            });
           }
         } else {
           await this.plugin.bibManager.loadGlobalBibFile();
@@ -513,8 +515,8 @@ export class ZoteroLibraryPanel {
   private updateLibraryModeUi(): void {
     const hasZotero = !!this.plugin.settings.pullFromZoteroApi;
     const hasBib =
-      !!this.plugin.settings.pathToBibliography?.trim() ||
-      this.plugin.bibManager.bibCache.size > 0;
+      parseBibliographyPaths(this.plugin.settings.pathToBibliography).length >
+        0 || this.plugin.bibManager.bibCache.size > 0;
     this.syncBtn?.toggleClass('is-hidden', !hasZotero);
     this.importPdfBtn?.toggleClass('is-hidden', !hasZotero);
     this.bibExportBtn?.toggleClass('is-hidden', !hasZotero);
@@ -709,8 +711,8 @@ export class ZoteroLibraryPanel {
 
     const hasZotero = !!this.plugin.settings.pullFromZoteroApi;
     const hasBib =
-      !!this.plugin.settings.pathToBibliography?.trim() ||
-      this.plugin.bibManager.bibCache.size > 0;
+      parseBibliographyPaths(this.plugin.settings.pathToBibliography).length >
+        0 || this.plugin.bibManager.bibCache.size > 0;
 
     // Mode fusion : affiche aussi le fichier `bibliography` de la note active.
     let scopedEntries: PartialCSLEntry[] = [];
@@ -741,16 +743,17 @@ export class ZoteroLibraryPanel {
     // Affiche le fichier `bibliography` de la note même sans bibliothèque globale
     // (mode fusion, setup frontmatter-only).
     if (hasBib || scopedEntries.length > 0) {
-      const bibPath = this.plugin.settings.pathToBibliography?.trim();
+      const bibPaths = parseBibliographyPaths(
+        this.plugin.settings.pathToBibliography
+      );
       try {
-        if (!hasZotero && bibPath) {
+        if (!hasZotero && bibPaths.length) {
           await this.plugin.bibManager.loadGlobalBibFile(true);
         }
-        if (bibPath) {
-          await this.plugin.bibManager.mergePdfLinksFromBibliographyFile(
-            bibPath,
-            { replace: !hasZotero }
-          );
+        for (const p of bibPaths) {
+          await this.plugin.bibManager.mergePdfLinksFromBibliographyFile(p, {
+            replace: !hasZotero,
+          });
         }
       } catch (e) {
         console.error(

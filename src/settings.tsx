@@ -3,6 +3,7 @@ import {
   Platform,
   PluginSettingTab,
   Setting,
+  TextAreaComponent,
   TextComponent,
 } from 'obsidian';
 
@@ -226,22 +227,26 @@ export class ReferenceListSettingsTab extends PluginSettingTab {
       .setDesc(
         t(
           'The absolute path to your desired bibliography file. This can be overridden on a per-file basis by setting "bibliography" in the file\'s frontmatter.'
-        )
+        ) +
+          ' ' +
+          t('One path per line; multiple files are merged.')
       )
       .then((setting) => {
-        let input: TextComponent;
-        setting.addText((text) => {
+        let input: TextAreaComponent;
+        setting.addTextArea((text) => {
           input = text;
-          text
-            .setValue(this.plugin.settings.pathToBibliography)
-            .onChange((value) => {
-              const prev = this.plugin.settings.pathToBibliography;
-              this.plugin.settings.pathToBibliography = value;
-              this.plugin.saveSettings(() => {
-                this.plugin.bibManager.clearWatcher(prev);
-                this.plugin.bibManager.reinit(true);
-              });
+          text.inputEl.rows = 3;
+          text.inputEl.addClass('pwc-settings-bib-paths');
+          text.setPlaceholder('_bib/library.json').setValue(
+            this.plugin.settings.pathToBibliography
+          );
+          text.onChange((value) => {
+            this.plugin.settings.pathToBibliography = value;
+            this.plugin.saveSettings(() => {
+              this.plugin.bibManager.clearAllWatchers();
+              this.plugin.bibManager.reinit(true);
             });
+          });
         });
 
         setting.addExtraButton((b) => {
@@ -265,12 +270,18 @@ export class ReferenceListSettingsTab extends PluginSettingTab {
             );
 
             if (path && path.length) {
-              input.setValue(path[0]);
+              // Ajoute le fichier choisi à la liste (une ligne par fichier).
+              const existing = this.plugin.settings.pathToBibliography ?? '';
+              const next = existing.trim()
+                ? `${existing.trim()}\n${path[0]}`
+                : path[0];
+              input.setValue(next);
 
-              this.plugin.settings.pathToBibliography = path[0];
-              this.plugin.saveSettings(() =>
-                this.plugin.bibManager.reinit(true)
-              );
+              this.plugin.settings.pathToBibliography = next;
+              this.plugin.saveSettings(() => {
+                this.plugin.bibManager.clearAllWatchers();
+                this.plugin.bibManager.reinit(true);
+              });
             }
           });
         });

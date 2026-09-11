@@ -4,6 +4,10 @@ import ReferenceList from 'src/main';
 import { PartialCSLEntry } from './types';
 import Fuse from 'fuse.js';
 import { wikilinkLinktext } from './wikilink';
+import {
+  frontmatterBibliographyValues,
+  parseBibliographyPaths,
+} from './bibPaths';
 import { expandTransclusions } from 'src/transclusions';
 import {
   bibToCSL,
@@ -54,7 +58,8 @@ const fuseSettings = {
 interface ScopedSettings {
   style?: string;
   lang?: string;
-  bibliography?: string;
+  /** Fichiers `bibliography` résolus (frontmatter, un ou plusieurs). */
+  bibliography?: string[];
 }
 
 export interface FileCache {
@@ -98,7 +103,7 @@ function getScopedSettings(file: TFile): ScopedSettings {
 
   const { frontmatter } = metadata;
 
-  output.bibliography = frontmatter.bibliography?.trim() || undefined;
+  const rawBibs = frontmatterBibliographyValues(frontmatter.bibliography);
   output.style =
     frontmatter.csl?.trim() ||
     frontmatter['citation-style']?.trim() ||
@@ -108,40 +113,46 @@ function getScopedSettings(file: TFile): ScopedSettings {
     frontmatter['citation-language']?.trim() ||
     undefined;
 
-  if (Object.values(output).every((v) => !v)) {
+  const hasBib = rawBibs.length > 0;
+  if (!hasBib && !output.style && !output.lang) {
     return null;
   }
 
   const pathApi = getPath();
   const root = getVaultRoot();
 
-  if (output.bibliography) {
-    // Wikilink Obsidian (`[[chemin/vers/fichier.json]]`) : on résout via l'index des
-    // liens (comme l'autocomplétion de l'éditeur) vers le chemin vault-relative, qui
-    // est canonique — on évite donc la résolution « à côté de la note » ci-dessous.
-    const link = wikilinkLinktext(output.bibliography);
-    if (link) {
-      try {
-        const dest = app.metadataCache.getFirstLinkpathDest(link, file.path);
-        if (dest instanceof TFile && dest.path) {
-          output.bibliography = dest.path;
-          return output;
+  if (hasBib) {
+    const resolved: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of rawBibs) {
+      let value = raw;
+      // Wikilink Obsidian (`[[chemin/vers/fichier.json]]`) : résolu via l'index des
+      // liens (comme l'autocomplétion de l'éditeur) vers un chemin vault-relative
+      // canonique — on évite alors la résolution « à côté de la note » ci-dessous.
+      const link = wikilinkLinktext(raw);
+      if (link) {
+        try {
+          const dest = app.metadataCache.getFirstLinkpathDest(link, file.path);
+          if (dest instanceof TFile && dest.path) value = dest.path;
+        } catch {
+          // cible introuvable : on garde la valeur (erreur au chargement)
         }
-      } catch {
-        // cible introuvable : on laisse la valeur telle quelle (erreur au chargement)
+      } else if (!pathApi.isAbsolute(value)) {
+        // Chemin relatif : fichier à côté de la note si présent, résolu en chemin
+        // absolu sur bureau et en chemin vault-relative sur mobile (adapter.read).
+        const noteRelative = pathApi
+          .join(pathApi.dirname(file.path), value)
+          .replace(/\\/g, '/');
+        if (app.vault.getAbstractFileByPath(noteRelative)) {
+          value = root ? pathApi.join(root, noteRelative) : noteRelative;
+        }
       }
-    } else if (!pathApi.isAbsolute(output.bibliography)) {
-      // Chemin relatif : on privilégie un fichier à côté de la note, résolu en chemin
-      // absolu sur bureau et en chemin relatif au coffre sur mobile (adapter.read).
-      const noteRelative = pathApi
-        .join(pathApi.dirname(file.path), output.bibliography)
-        .replace(/\\/g, '/');
-      if (app.vault.getAbstractFileByPath(noteRelative)) {
-        output.bibliography = root
-          ? pathApi.join(root, noteRelative)
-          : noteRelative;
+      if (!seen.has(value)) {
+        seen.add(value);
+        resolved.push(value);
       }
     }
+    output.bibliography = resolved;
   }
 
   return output;
@@ -175,7 +186,7 @@ function embeddedBibliographyPaths(root: TFile): string[] {
       if (!dest || seen.has(dest.path)) continue;
       seen.add(dest.path);
       const s = getScopedSettings(dest);
-      if (s?.bibliography) out.push(s.bibliography);
+      if (s?.bibliography?.length) out.push(...s.bibliography);
       visit(dest);
     }
   };
@@ -249,8 +260,8 @@ export class BibManager {
       max: 10,
       noDisposeOnSet: true,
       dispose: (cache) => {
-        if (cache.settings?.bibliography) {
-          this.clearWatcher(cache.settings.bibliography);
+        for (const bibPath of cache.settings?.bibliography ?? []) {
+          this.clearWatcher(bibPath);
         }
       },
     });
@@ -297,7 +308,7 @@ export class BibManager {
 
   /** Vrai si le fichier déclare une bibliographie (clé `bibliography`) en frontmatter. */
   hasFrontmatterBibliography(file: TFile): boolean {
-    return !!getScopedSettings(file)?.bibliography;
+    return (getScopedSettings(file)?.bibliography?.length ?? 0) > 0;
   }
 
   /** Vrai si la note — ou, en mode fusion, une note transcluse — apporte une bibliographie. */
@@ -328,6 +339,14 @@ export class BibManager {
       this.watcherCache.get(path).close();
       this.watcherCache.delete(path);
     }
+  }
+
+  /** Ferme tous les watchers (bibliothèques globales et scoped). */
+  clearAllWatchers(): void {
+    for (const watcher of this.watcherCache.values()) {
+      watcher.close();
+    }
+    this.watcherCache.clear();
   }
 
   async reinit(clearCache: boolean) {
@@ -538,20 +557,20 @@ export class BibManager {
   } | null> {
     const merge = includeEmbeds;
     const layers: ScopedBibCacheEntry[] = [];
+    const seenBib = new Set<string>();
 
-    if (settings?.bibliography) {
+    // Bibliographies propres à la note (une ou plusieurs), dans l'ordre déclaré :
+    // la première l'emporte sur les suivantes.
+    for (const bibPath of settings?.bibliography ?? []) {
+      const resolved = this.resolveScopedBibPath(bibPath);
+      if (seenBib.has(resolved)) continue;
+      seenBib.add(resolved);
       // Peut lever : la note courante doit rester en échec visible (fallback global).
-      const own = await this.getScopedBib(
-        this.resolveScopedBibPath(settings.bibliography)
-      );
+      const own = await this.getScopedBib(resolved);
       if (own) layers.push(own);
     }
 
     if (merge && contextFile) {
-      const ownResolved = layers.length
-        ? this.resolveScopedBibPath(settings!.bibliography!)
-        : null;
-      const seenBib = new Set<string>(ownResolved ? [ownResolved] : []);
       for (const bibPath of embeddedBibliographyPaths(contextFile)) {
         const rp = this.resolveScopedBibPath(bibPath);
         if (seenBib.has(rp)) continue;
@@ -619,20 +638,16 @@ export class BibManager {
       this.plugin.settings.unusedMergeTranscludedBibs ??
       false;
 
-    if (!settings?.bibliography && !mergeTranscludedBibs) return null;
+    if (!settings?.bibliography?.length && !mergeTranscludedBibs) return null;
 
-    // Entrées candidates : fichier propre, éventuellement complété par les
-    // bibliographies des notes transcluses (mode « merge bib »).
-    let pool: Map<string, PartialCSLEntry> | null = null;
-    if (mergeTranscludedBibs) {
-      const ctx = await this.resolveScopedContext(settings, file, true);
-      pool = ctx?.bibCache ?? null;
-    } else if (settings?.bibliography) {
-      const cache = await this.getScopedBib(
-        this.resolveScopedBibPath(settings.bibliography)
-      );
-      pool = cache?.bibCache ?? null;
-    }
+    // Entrées candidates : les bibliographies de la note (une ou plusieurs),
+    // éventuellement complétées par celles des notes transcluses.
+    const ctx = await this.resolveScopedContext(
+      settings,
+      file,
+      mergeTranscludedBibs
+    );
+    const pool = ctx?.bibCache ?? null;
     if (!pool) return null;
 
     // Usage : texte de la note, éventuellement enrichi du contenu transclus.
@@ -723,10 +738,10 @@ export class BibManager {
       }
     }
 
-    if (scopedSettings.bibliography || mergeContext) {
+    if (scopedSettings.bibliography?.length || mergeContext) {
       try {
         if (this.plugin.settings.mergeScopedBibliography) {
-          // Couche « contexte de la note » (bibliographie propre + notes transcluses)
+          // Couche « contexte de la note » (bibliographies propres + notes transcluses)
           // par-dessus la bibliothèque globale/Zotero : recherche par couche dans le
           // moteur, aucune copie du cache global.
           const ctx = await this.resolveScopedContext(settings, contextFile);
@@ -734,22 +749,20 @@ export class BibManager {
             scopedCache = ctx.bibCache;
             scopedFuse = ctx.fuse;
           }
-        } else if (scopedSettings.bibliography) {
-          const scoped = await this.getScopedBib(
-            this.resolveScopedBibPath(scopedSettings.bibliography)
-          );
-          if (scoped) {
-            // Comportement historique : seule la bibliographie de la note est utilisée.
-            bibCache = scoped.bibCache;
-            fuse = scoped.fuse;
+        } else {
+          // Comportement historique : seule(s) la/les bibliographie(s) de la note
+          // est/sont utilisée(s) (union si plusieurs fichiers).
+          const ctx = await this.resolveScopedContext(settings, contextFile, false);
+          if (ctx) {
+            bibCache = ctx.bibCache;
+            fuse = ctx.fuse;
           }
         }
 
-        if (scopedSettings.bibliography) {
-          await this.mergePdfLinksFromBibliographyFile(
-            scopedSettings.bibliography,
-            { replace: false }
-          );
+        for (const bibPath of scopedSettings.bibliography ?? []) {
+          await this.mergePdfLinksFromBibliographyFile(bibPath, {
+            replace: false,
+          });
         }
       } catch (e) {
         console.error(e);
@@ -793,55 +806,61 @@ export class BibManager {
 
   async loadGlobalBibFile(fromCache?: boolean) {
     const { settings } = this.plugin;
+    const paths = parseBibliographyPaths(settings.pathToBibliography);
 
-    if (!settings.pathToBibliography) return;
+    if (!paths.length) return;
 
     /** Avec l’API Zotero, le .bib ne remplace pas bibCache (sinon les tooltips perdent les clés). */
     if (settings.pullFromZoteroApi) {
-      await this.mergePdfLinksFromBibliographyFile(settings.pathToBibliography, {
-        replace: false,
-      });
+      for (const p of paths) {
+        await this.mergePdfLinksFromBibliographyFile(p, { replace: false });
+      }
       return;
     }
 
     if (!fromCache || this.bibCache.size === 0) {
-      const bib = await bibToCSL(settings.pathToBibliography, getVaultRoot);
-
       this.bibCache = new Map();
-      const bibPath = getBibPath(settings.pathToBibliography, getVaultRoot);
 
-      if (isDesktop() && bibPath && !this.watcherCache.has(bibPath)) {
-        const fsApi = getFs();
-        let dbTimer = 0;
-        this.watcherCache.set(
-          bibPath,
-          fsApi.watch(bibPath, (evt) => {
-            if (evt === 'change') {
-              window.clearTimeout(dbTimer);
-              dbTimer = (typeof activeWindow !== 'undefined' ? activeWindow : window).setTimeout(() => {
-                this.loadGlobalBibFile().then(() => {
-                  this.fileCache.clear();
-                  this.plugin.processReferences();
-                });
-              }, 100);
-            } else {
-              this.clearWatcher(bibPath);
-            }
-          })
-        );
+      for (const p of paths) {
+        const bib = await bibToCSL(p, getVaultRoot);
+        // Le premier fichier l'emporte sur les collisions d'identifiant.
+        for (const entry of bib) {
+          if (entry?.id && !this.bibCache.has(entry.id)) {
+            this.bibCache.set(entry.id, entry);
+          }
+        }
+
+        const bibPath = getBibPath(p, getVaultRoot);
+        if (isDesktop() && bibPath && !this.watcherCache.has(bibPath)) {
+          const fsApi = getFs();
+          let dbTimer = 0;
+          this.watcherCache.set(
+            bibPath,
+            fsApi.watch(bibPath, (evt) => {
+              if (evt === 'change') {
+                window.clearTimeout(dbTimer);
+                dbTimer = (typeof activeWindow !== 'undefined' ? activeWindow : window).setTimeout(() => {
+                  this.loadGlobalBibFile().then(() => {
+                    this.fileCache.clear();
+                    this.plugin.processReferences();
+                  });
+                }, 100);
+              } else {
+                this.clearWatcher(bibPath);
+              }
+            })
+          );
+        }
       }
 
-      for (const entry of bib) {
-        this.bibCache.set(entry.id, entry);
-      }
-
-      this.setFuse(bib);
-
+      this.setFuse(Array.from(this.bibCache.values()));
     }
 
-    await this.mergePdfLinksFromBibliographyFile(settings.pathToBibliography, {
-      replace: !this.plugin.settings.pullFromZoteroApi,
-    });
+    for (const p of paths) {
+      await this.mergePdfLinksFromBibliographyFile(p, {
+        replace: !this.plugin.settings.pullFromZoteroApi,
+      });
+    }
 
     const style =
       settings.cslStylePath ||
@@ -954,10 +973,11 @@ export class BibManager {
       if (parentSt.key && parentSt.key !== csl.id) pushPdf(parentSt.key);
     }
 
-    await this.mergePdfLinksFromBibliographyFile(
-      this.plugin.settings.pathToBibliography,
-      { replace: false }
-    );
+    for (const p of parseBibliographyPaths(
+      this.plugin.settings.pathToBibliography
+    )) {
+      await this.mergePdfLinksFromBibliographyFile(p, { replace: false });
+    }
 
     this.setFuse(bib);
 
@@ -1244,12 +1264,10 @@ export class BibManager {
     const settings = getScopedSettings(file);
     // Invalide le cache source quand le contexte change : bibliographie propre et
     // bibliographies des notes transcluses (mode fusion).
+    const ownBibs = settings?.bibliography ?? [];
     const contextSignature = this.plugin.settings.mergeScopedBibliography
-      ? JSON.stringify([
-          settings?.bibliography ?? '',
-          ...embeddedBibliographyPaths(file),
-        ])
-      : JSON.stringify([settings?.bibliography ?? '']);
+      ? JSON.stringify([...ownBibs, ...embeddedBibliographyPaths(file)])
+      : JSON.stringify(ownBibs);
 
     processed.forEach((p) =>
       p.citations.forEach((c) => {
@@ -1260,13 +1278,16 @@ export class BibManager {
     );
 
     const areSettingsEqual =
-      settings?.bibliography === cachedDoc?.settings?.bibliography &&
+      JSON.stringify(settings?.bibliography ?? []) ===
+        JSON.stringify(cachedDoc?.settings?.bibliography ?? []) &&
       settings?.style === cachedDoc?.settings?.style &&
       settings?.lang === cachedDoc?.settings?.lang &&
       contextSignature === cachedDoc?.contextSignature;
 
-    if (!areSettingsEqual && cachedDoc?.settings?.bibliography) {
-      this.clearWatcher(cachedDoc.settings.bibliography);
+    if (!areSettingsEqual) {
+      for (const bibPath of cachedDoc?.settings?.bibliography ?? []) {
+        this.clearWatcher(bibPath);
+      }
     }
 
     let source =
@@ -1277,7 +1298,7 @@ export class BibManager {
     // Un échec de chargement du fichier `bibliography` du frontmatter ne doit pas
     // rester bloqué sur la bibliographie globale : on ne mémorise pas ces settings,
     // le fichier local sera retenté au prochain passage.
-    const scopedFailed = !!settings?.bibliography && source === this;
+    const scopedFailed = !!settings?.bibliography?.length && source === this;
 
     if (!source?.engine) {
       if (!this.engine) {
@@ -1292,14 +1313,15 @@ export class BibManager {
       }
     }
 
-    if (isDesktop() && settings?.bibliography) {
-      let bibPath: string | null = null;
-      try {
-        bibPath = getBibPath(settings.bibliography, getVaultRoot);
-      } catch (e) {
-        console.error('[PandoCit] cannot watch bibliography file', e);
-      }
-      if (bibPath && !this.watcherCache.has(bibPath)) {
+    if (isDesktop()) {
+      for (const bibFile of settings?.bibliography ?? []) {
+        let bibPath: string | null = null;
+        try {
+          bibPath = getBibPath(bibFile, getVaultRoot);
+        } catch (e) {
+          console.error('[PandoCit] cannot watch bibliography file', e);
+        }
+        if (!bibPath || this.watcherCache.has(bibPath)) continue;
         const fsApi = getFs();
         let dbTimer = 0;
         this.watcherCache.set(
