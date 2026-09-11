@@ -22,11 +22,26 @@
 
 <p>
 <a href="https://atelier.atechnologie.fr/"><img src="https://img.shields.io/badge/🌐_l'Atelier-atelier.atechnologie.fr-2d5016?style=for-the-badge" alt="Site l'Atelier" /></a>
-<a href="https://github.com/Atelier-Recherche/pandocit"><img src="https://img.shields.io/badge/📦_Dépôt-GitHub-181717?style=for-the-badge&logo=github" alt="Dépôt GitHub" /></a>
+<a href="https://github.com/ancaemcken/pandocit"><img src="https://img.shields.io/badge/📦_Fork-ancaemcken%2Fpandocit-181717?style=for-the-badge&logo=github" alt="Dépôt du fork" /></a>
+<a href="https://github.com/Atelier-Recherche/pandocit"><img src="https://img.shields.io/badge/⬆️_Amont-Atelier--Recherche-6b7280?style=for-the-badge&logo=github" alt="Dépôt d'origine" /></a>
 <a href="https://obsidian.md/plugins?search=BRAT#"><img src="https://img.shields.io/badge/⬇️_Installer-BRAT-7c3aed?style=for-the-badge&logo=obsidian&logoColor=white" alt="Installer via BRAT" /></a>
 </p>
 
 </div>
+
+---
+
+> **🍴 Ceci est un fork de [PandoCit de l'Atelier](https://github.com/Atelier-Recherche/pandocit).**
+> C'est une extension volontairement orientée **local-first**, centrée sur les fichiers de
+> bibliographie par note et sur les grandes bibliothèques Zotero *non* synchronisées via
+> l'API. Les fonctionnalités et le crédit d'origine sont conservés.
+>
+> - **Installation / signalements pour ce fork :** [github.com/ancaemcken/pandocit](https://github.com/ancaemcken/pandocit)
+> - **Projet d'origine :** [github.com/Atelier-Recherche/pandocit](https://github.com/Atelier-Recherche/pandocit)
+> - Les nouvelles fonctionnalités sont décrites dans [Fonctionnalités du fork — flux local-first](#-fonctionnalités-du-fork--flux-local-first).
+>
+> Les versions de ce dépôt sont construites et publiées par GitHub Actions ; installez ce
+> fork avec **BRAT** en utilisant l'URL du fork ci-dessous.
 
 ---
 
@@ -48,7 +63,7 @@ Affiche dans le panneau latéral une liste de références formatée pour chaque
 
 1. 🔌 Installer **BRAT** : [Obsidian — BRAT](https://obsidian.md/plugins?search=BRAT#)
 2. ➕ Ajouter ce dépôt avec l’option *« Add Beta plugin »* :  
-   `https://github.com/Atelier-Recherche/pandocit`
+   `https://github.com/ancaemcken/pandocit`
 
 > 💡 Nos plugins peuvent être en attente de validation sur le catalogue Obsidian ; BRAT permet de les tester dès maintenant. Voir aussi 🌐 [l’Atelier](https://atelier.atechnologie.fr/).
 
@@ -57,12 +72,115 @@ Affiche dans le panneau latéral une liste de références formatée pour chaque
 - 🦀 Le plugin utilise **Pandoc 3.9 en WebAssembly** (`pandoc.wasm`) pour convertir les fichiers de bibliographie (BibTeX, etc.) en CSL JSON. **Aucune installation de Pandoc sur le système n’est nécessaire.**
 - 📱 Compatible **Obsidian bureau** (Windows, macOS, Linux) **et mobile** (Android, iOS) : le même plugin fonctionne sur ordinateur, téléphone et tablette.
 
+## 🍴 Fonctionnalités du fork — flux local-first
+
+Ce fork conserve toutes les fonctionnalités d'origine et ajoute des flux pour celles et
+ceux qui gardent leur bibliographie sous forme de **fichiers CSL JSON / BibTeX locaux**
+plutôt que via une synchronisation Zotero. Tout ce qui suit fonctionne sur ordinateur
+**et** mobile.
+
+### 📎 Bibliographies scoped (par note)
+
+Pointez une note vers un ou plusieurs fichiers de bibliographie dans ses métadonnées :
+
+```yaml
+---
+bibliography: "[[_bib/viola-odorata.json]]"
+---
+```
+
+Plusieurs fichiers à la fois (ils sont fusionnés ; le premier l'emporte sur les clés en double) :
+
+```yaml
+---
+bibliography:
+  - "[[_bib/partage.json]]"
+  - "[[_bib/viola-odorata.json]]"
+---
+```
+
+- Les wikilinks (`[[…]]`) sont résolus via l'index des liens d'Obsidian : inutile de
+  retenir les chemins relatifs au coffre. Les chemins relatifs au coffre ou absolus
+  fonctionnent aussi.
+- Par défaut, la clé `bibliography` d'une note **remplace** la bibliothèque globale pour
+  cette note. Activez **Réglages → Fusionner la bibliographie de la note avec la
+  bibliothèque globale** pour résoudre contre **les deux** (le fichier de la note reste
+  prioritaire). Avec l'API Zotero Web activée, ce même réglage fusionne le fichier de la
+  note avec la bibliothèque synchronisée.
+
+### 📚 Plusieurs fichiers de bibliographie globaux
+
+Le réglage global **Chemin du fichier de bibliographie** est une zone de texte avec **un
+chemin par ligne** ; tous les fichiers listés sont fusionnés (le premier l'emporte sur les
+collisions). Le sélecteur de dossier ajoute une ligne au lieu de remplacer le réglage.
+
+### 🔗 Citations dans les transclusions (embeds)
+
+Le contenu des notes intégrées (`![[Note]]`) est déplié lors de la résolution des citations
+et de la construction de la liste de références, et les citations *à l'intérieur* des notes
+intégrées sont rendues en mode lecture comme en aperçu live. La `bibliography` de chaque
+note transcluse peut aussi être fusionnée dans la note hôte (récursivement ; les cycles
+sont ignorés).
+
+### 📖 Le panneau Bibliothèque suit la note active
+
+Quand la note active déclare une `bibliography`, le panneau Bibliothèque liste ces entrées
+et s'actualise automatiquement lorsque vous passez à une note dotée d'une bibliographie
+scoped (ignoré tant que la synchronisation Zotero Web API est active, pour éviter des
+appels réseau à chaque changement de note).
+
+### 🧹 Onglet « Références non utilisées »
+
+Un quatrième onglet liste les entrées de la bibliographie locale **propre** à la note
+active qui sont *inutilisées*. Une entrée est inutilisée quand sa clé n'est pas citée
+**ou** qu'une de ses notes de lecture n'est pas intégrée.
+
+- **Compter les notes transcluses** (par défaut **activé**) : les citations des notes
+  intégrées comptent comme utilisées.
+- **Fusionner la bibliographie des notes transcluses** (par défaut **désactivé**) : liste
+  aussi les entrées des fichiers de bibliographie des notes intégrées.
+- Filtres : **Toutes les non utilisées**, **Citée, sans note**, **Tout**, plus une recherche.
+- Les lignes « Citée, sans note » sont surlignées d'une couleur configurable
+  (**Réglages → Couleur « citée, sans note »**, par défaut `#e5a50a`).
+- Actions par ligne : sélection (multiple), **Insérer la clé** (`[@clé]` au curseur),
+  **Créer une note**, **Ouvrir l'URL**, **Ouvrir dans Zotero**.
+
+### 🗒️ Notes de lecture
+
+Une note par constat, nommée `<clé>-<n>.md` (à partir de `-0`) dans un **Dossier des notes**
+configurable (Réglages → Dossier des notes ; relatif au coffre, vide par défaut).
+
+- Corps : `==Créer un résumé pour @<clé>, <titre>==`.
+- Les métadonnées reprennent les champs de l'entrée (`citekey`, `title`, `author`,
+  `issued`, `type`, `container-title`, `publisher`, `volume`, `issue`, `pages`, `doi`,
+  `url`). Pas de résumé et pas de clé `bibliography`, afin qu'une note de lecture puisse
+  être intégrée n'importe où.
+- **Création en masse** : crée l'index `0` uniquement, sans jamais écraser.
+- **Création par ligne** : crée l'index libre suivant.
+- Les notes existantes apparaissent sous **Notes existantes**, avec un bouton « inclure au
+  curseur » lorsque la note n'est pas déjà intégrée.
+
+### 🦊 Ouvrir dans Zotero sans synchronisation API (mobile inclus)
+
+Lorsque les clés de citation sont des clés d'élément Zotero, le plugin construit des liens
+`zotero://select/library/items/<CLÉ>` (et `zotero://select/groups/<gid>/items/<CLÉ>` pour
+les groupes) **sans clé API ni identifiant utilisateur**. Ils fonctionnent dans Safari
+iOS/iPadOS et Zotero pour iOS, et sont utilisés par l'onglet Non utilisées et par les
+lignes de bibliothèque locale du panneau Bibliothèque. Sur ordinateur, un repli Better
+BibTeX RPC gère les clés qui ne sont pas des clés d'élément.
+
+---
+
 ## 🔧 Configuration
 
 1. **📚 Bibliographie**  
-   Indiquez le chemin vers votre fichier de bibliographie (compatible Pandoc : `.bib`, `.json` CSL, etc.).  
+   Indiquez le(s) chemin(s) vers votre ou vos fichiers de bibliographie. Formats pris en charge :  
+   - **CSL JSON** (`.json`) — lu directement, sans Pandoc.  
+   - **`.bib`, `.bibtex`, `.biblatex`, `.yaml` / `.yml`, `.ris`** — convertis par Pandoc WASM (`pandoc.wasm` requis, voir *Limitations connues (WASM)* ci-dessous).  
+   - **Plusieurs fichiers** : un chemin par ligne dans le réglage global ; une liste YAML ou un ou plusieurs wikilinks dans les métadonnées d'une note.  
    - 🖥️ Sur **bureau** : bouton de sélection ou chemin absolu / relatif au coffre.  
-   - 📱 Sur **mobile** : chemin **relatif au coffre** (ex. `refs/bibliographie.bib`). La boîte « ouvrir un fichier » n’est disponible que sur bureau.
+   - 📱 Sur **mobile** : chemin **relatif au coffre** (ex. `refs/bibliographie.bib`). La boîte « ouvrir un fichier » n'est disponible que sur bureau.  
+   - La clé `bibliography` d'une note peut **remplacer** (par défaut) ou **fusionner avec** la bibliothèque globale — voir **Fusionner la bibliographie de la note avec la bibliothèque globale**.
 
 2. **🎨 Style de citation (CSL)** *(optionnel)*  
    Liste intégrée ou fichier `.csl` (chemin ou URL), éventuellement surchargé par le frontmatter (`bibliography`, `csl`, `lang`, etc.).
@@ -74,6 +192,11 @@ Affiche dans le panneau latéral une liste de références formatée pour chaque
    Dans les réglages du plugin : langue des libellés (paramètres, notices, panneau latéral).
 
 ## 📚 Zotero (optionnel)
+
+> **Local-first ?** L'intégration Zotero est entièrement optionnelle dans ce fork. Vous
+> pouvez n'utiliser que des fichiers de bibliographie locaux et conserver des liens
+> **Ouvrir dans Zotero** fonctionnels lorsque vos clés de citation sont des clés d'élément
+> Zotero — sans clé API (voir [Fonctionnalités du fork](#-fonctionnalités-du-fork--flux-local-first)).
 
 ### 🔗 Better BibTeX / flux local
 
@@ -157,7 +280,7 @@ Token API et groupe dans les réglages. **Import** des annotations Hypothesis ve
 - Rappel de synchronisation Zotero avant export `.bib`.
 - Support **Typst** / modèles de notes de lecture depuis les annotations.
 
-> Les cases cochées reflètent l’état du dépôt à la date de la doc ; la roadmap peut évoluer sur [GitHub Issues](https://github.com/Atelier-Recherche/pandocit/issues).
+> Les cases cochées reflètent l’état du dépôt à la date de la doc ; la roadmap peut évoluer sur [GitHub Issues](https://github.com/ancaemcken/pandocit/issues). Les tickets d'origine sont sur [Atelier-Recherche/pandocit](https://github.com/Atelier-Recherche/pandocit/issues).
 
 ## 💻 Développement et build
 
@@ -172,7 +295,7 @@ En CI / release, `yarn install` utilise `--ignore-scripts` et un cache Yarn loca
 
 Le build produit notamment :
 
-- `main.js` (bundle ; non versionné — fourni par les [releases GitHub](https://github.com/Atelier-Recherche/pandocit/releases))
+- `main.js` (bundle ; non versionné — fourni par les [releases GitHub](https://github.com/ancaemcken/pandocit/releases))
 - `manifest.json`, `styles.css`
 - `pdf.worker.min.mjs`, `foliate-view.mjs` (optionnels dans le coffre ; worker embarqué dans `main.js`, lecteur EPUB téléchargeable depuis les réglages)
 - `pdf-assets/`, `foliate/` (générés au build, non versionnés ; `foliate/` sert au bundle `foliate-view.mjs`)
@@ -185,7 +308,7 @@ Le build produit notamment :
 
 Copie `main.js`, `manifest.json`, `styles.css`, `pdf.worker.min.mjs` et `foliate-view.mjs` vers le dossier plugin Obsidian (préserve `data.json` et `pandoc.wasm`).
 
-**Release** : `.\Release-Plugin.ps1` incrémente la version, build, commit, tag et push ; la [workflow release](.github/workflows/release.yml) publie **uniquement** `main.js`, `manifest.json` et `styles.css` (exigence du [catalogue Obsidian](https://docs.obsidian.md/Reference/Releasing+your+plugin)). Le worker PDF est **inclus dans `main.js`** ; un téléchargement optionnel de `pdf.worker.min.mjs` est proposé dans les **réglages du plugin** (comme pour `pandoc.wasm`).
+**Release** : `node release.mjs patch` incrémente `package.json`, synchronise `manifest.json`/`versions.json`, régénère `release-notes.md`, puis commit, tag et push (chaîne : `npm version` → `yarn bump` → `yarn release`). `--yes` saute la confirmation ; `--dry-run` s'arrête avant le commit. La [workflow release](.github/workflows/release.yml) publie **uniquement** `main.js`, `manifest.json` et `styles.css` (exigence du [catalogue Obsidian](https://docs.obsidian.md/Reference/Releasing+your+plugin)). Le worker PDF est **inclus dans `main.js`** ; un téléchargement optionnel de `pdf.worker.min.mjs` est proposé dans les **réglages du plugin** (comme pour `pandoc.wasm`).
 
 Dans le coffre, installez aussi **`pandoc.wasm`** via les réglages du plugin (obligatoire pour les bibliographies non-JSON).
 
@@ -198,7 +321,8 @@ Pandoc WASM tourne dans un bac à sable : pas d’accès réseau arbitraire ni d
 | | |
 | --- | --- |
 | 🌐 **l'Atelier** | [atelier.atechnologie.fr](https://atelier.atechnologie.fr/) |
-| 📦 **Dépôt** | [github.com/Atelier-Recherche/pandocit](https://github.com/Atelier-Recherche/pandocit) |
+| 📦 **Dépôt du fork** | [github.com/ancaemcken/pandocit](https://github.com/ancaemcken/pandocit) |
+| ⬆️ **Amont** | [github.com/Atelier-Recherche/pandocit](https://github.com/Atelier-Recherche/pandocit) |
 | 📄 **Pandoc** | [pandoc.org](https://pandoc.org/) — [Releases / pandoc.wasm 3.9](https://github.com/jgm/pandoc/releases) |
 | 🎓 **CSL** | [citationstyles.org](https://citationstyles.org/) |
 

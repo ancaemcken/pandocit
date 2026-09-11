@@ -22,11 +22,26 @@
 
 <p>
 <a href="https://atelier.atechnologie.fr/"><img src="https://img.shields.io/badge/🌐_l'Atelier-atelier.atechnologie.fr-2d5016?style=for-the-badge" alt="Sitio l'Atelier" /></a>
-<a href="https://github.com/Atelier-Recherche/pandocit"><img src="https://img.shields.io/badge/📦_Repositorio-GitHub-181717?style=for-the-badge&logo=github" alt="Repositorio GitHub" /></a>
+<a href="https://github.com/ancaemcken/pandocit"><img src="https://img.shields.io/badge/📦_Fork-ancaemcken%2Fpandocit-181717?style=for-the-badge&logo=github" alt="Repositorio del fork" /></a>
+<a href="https://github.com/Atelier-Recherche/pandocit"><img src="https://img.shields.io/badge/⬆️_Original-Atelier--Recherche-6b7280?style=for-the-badge&logo=github" alt="Repositorio original" /></a>
 <a href="https://obsidian.md/plugins?search=BRAT#"><img src="https://img.shields.io/badge/⬇️_Instalar-BRAT-7c3aed?style=for-the-badge&logo=obsidian&logoColor=white" alt="Instalar vía BRAT" /></a>
 </p>
 
 </div>
+
+---
+
+> **🍴 Esto es un fork de [PandoCit de l'Atelier](https://github.com/Atelier-Recherche/pandocit).**
+> Es una extensión deliberadamente orientada a **local-first**, centrada en archivos de
+> bibliografía por nota y en bibliotecas Zotero grandes que *no* se sincronizan mediante la
+> API. Se conservan las funciones y el crédito originales.
+>
+> - **Instalación / incidencias de este fork:** [github.com/ancaemcken/pandocit](https://github.com/ancaemcken/pandocit)
+> - **Proyecto original:** [github.com/Atelier-Recherche/pandocit](https://github.com/Atelier-Recherche/pandocit)
+> - Las nuevas funciones se describen en [Funciones del fork — flujos local-first](#-funciones-del-fork--flujos-local-first).
+>
+> Las versiones de este repositorio se compilan y publican con GitHub Actions; instale este
+> fork con **BRAT** usando la URL del fork que figura abajo.
 
 ---
 
@@ -46,7 +61,7 @@ Muestra en el panel lateral una lista de referencias formateada para cada clave 
 
 1. 🔌 Instalar **BRAT**: [Obsidian — BRAT](https://obsidian.md/plugins?search=BRAT#)
 2. ➕ Añadir este repositorio con *« Add Beta plugin »*:  
-   `https://github.com/Atelier-Recherche/pandocit`
+   `https://github.com/ancaemcken/pandocit`
 
 > 💡 Nuestros plugins pueden estar pendientes de validación en el catálogo de Obsidian; BRAT permite probarlos de inmediato. Véase también 🌐 [l'Atelier](https://atelier.atechnologie.fr/).
 
@@ -55,12 +70,114 @@ Muestra en el panel lateral una lista de referencias formateada para cada clave 
 - 🦀 El plugin utiliza **Pandoc 3.9 WebAssembly** (`pandoc.wasm`) para convertir archivos de bibliografía (BibTeX, etc.) a CSL JSON. **No hace falta instalar Pandoc en el sistema.**
 - 📱 Compatible con **Obsidian de escritorio** (Windows, macOS, Linux) **y móvil** (Android, iOS): el mismo plugin en ordenador, teléfono y tableta.
 
+## 🍴 Funciones del fork — flujos local-first
+
+Este fork conserva todas las funciones originales y añade flujos para quienes mantienen su
+bibliografía como **archivos CSL JSON / BibTeX locales** en lugar de sincronizar Zotero.
+Todo lo siguiente funciona en escritorio **y** móvil.
+
+### 📎 Bibliografías scoped (por nota)
+
+Apunte una nota a uno o varios archivos de bibliografía en su frontmatter:
+
+```yaml
+---
+bibliography: "[[_bib/viola-odorata.json]]"
+---
+```
+
+Varios archivos a la vez (se fusionan; el primero gana en claves duplicadas):
+
+```yaml
+---
+bibliography:
+  - "[[_bib/compartida.json]]"
+  - "[[_bib/viola-odorata.json]]"
+---
+```
+
+- Los wikilinks (`[[…]]`) se resuelven con el índice de enlaces de Obsidian, así que no
+  hace falta recordar rutas relativas al vault. Las rutas relativas al vault o absolutas
+  también funcionan.
+- Por defecto, `bibliography` de una nota **reemplaza** la biblioteca global para esa nota.
+  Active **Ajustes → Fusionar la bibliografía de la nota con la biblioteca global** para
+  resolver contra **ambas** (el archivo de la nota sigue teniendo prioridad). Con la API web
+  de Zotero activada, ese mismo ajuste fusiona el archivo de la nota con la biblioteca
+  sincronizada.
+
+### 📚 Varios archivos de bibliografía globales
+
+El ajuste global **Ruta del archivo de bibliografía** es un área de texto con **una ruta
+por línea**; todos los archivos se fusionan (el primero gana en colisiones). El selector de
+carpeta añade una línea en lugar de reemplazar el ajuste.
+
+### 🔗 Citas dentro de transclusiones (embeds)
+
+El contenido de las notas incrustadas (`![[Nota]]`) se expande al resolver citas y al
+construir la lista de referencias, y las citas *dentro* de las notas incrustadas se
+renderizan tanto en modo lectura como en vista previa en vivo. La `bibliography` de cada
+nota transcluida también puede fusionarse en la nota anfitriona (recursivo; se omiten los
+ciclos).
+
+### 📖 El panel Biblioteca sigue la nota activa
+
+Cuando la nota activa declara una `bibliography`, el panel Biblioteca lista esas entradas y
+se actualiza automáticamente al cambiar a una nota con bibliografía scoped (se omite
+mientras la sincronización con la API web de Zotero está activa, para evitar llamadas de
+red en cada cambio de nota).
+
+### 🧹 Pestaña «Referencias no utilizadas»
+
+Una cuarta pestaña lista las entradas de la bibliografía local **propia** de la nota activa
+que están *sin usar*. Una entrada está sin usar cuando su clave no se cita **o** una de sus
+notas de lectura no está incrustada.
+
+- **Contar notas transcluidas** (por defecto **activado**): las citas dentro de embeds
+  cuentan como usadas.
+- **Fusionar la bibliografía de notas transcluidas** (por defecto **desactivado**): lista
+  también entradas de los archivos de bibliografía de las notas incrustadas.
+- Filtros: **Todas las no utilizadas**, **Citada, sin notas**, **Todo**, más un buscador.
+- Las filas «Citada, sin notas» se resaltan con un color configurable
+  (**Ajustes → Color de «citada, sin notas»**, por defecto `#e5a50a`).
+- Acciones por fila: selección (múltiple), **Insertar clave** (`[@clave]` en el cursor),
+  **Crear nota**, **Abrir URL**, **Abrir en Zotero**.
+
+### 🗒️ Notas de lectura
+
+Una nota por hallazgo, llamada `<citekey>-<n>.md` (desde `-0`) dentro de una **Carpeta de
+notas** configurable (Ajustes → Carpeta de notas; relativa al vault, vacía por defecto).
+
+- Cuerpo: `==Create a summary for @<citekey>, <title>==`.
+- El frontmatter incluye los campos de la entrada (`citekey`, `title`, `author`, `issued`,
+  `type`, `container-title`, `publisher`, `volume`, `issue`, `pages`, `doi`, `url`). Sin
+  resumen y sin clave `bibliography`, para que una nota de lectura pueda incrustarse en
+  cualquier lugar.
+- **Creación masiva**: crea solo el índice `0` y nunca sobrescribe.
+- **Creación por fila**: crea el siguiente índice libre.
+- Las notas existentes aparecen en **Notas existentes**, con un botón «incluir en el
+  cursor» cuando la nota aún no está incrustada.
+
+### 🦊 Abrir en Zotero sin sincronización API (incluido móvil)
+
+Cuando las claves de cita son claves de elemento de Zotero, el plugin construye enlaces
+`zotero://select/library/items/<CLAVE>` (y `zotero://select/groups/<gid>/items/<CLAVE>` para
+grupos) **sin clave API ni ID de usuario**. Funcionan en Safari de iOS/iPadOS y en Zotero
+para iOS, y los usan la pestaña de no utilizadas y las filas de biblioteca local del panel
+Biblioteca. En escritorio, un recurso Better BibTeX RPC cubre las claves que no son claves
+de elemento.
+
+---
+
 ## 🔧 Configuración
 
 1. **📚 Bibliografía**  
-   Ruta al archivo de bibliografía (compatible con Pandoc: `.bib`, `.json` CSL, etc.).  
+   Ruta(s) a su(s) archivo(s) de bibliografía. Formatos compatibles:  
+   - **CSL JSON** (`.json`) — se lee directamente, sin Pandoc.  
+   - **`.bib`, `.bibtex`, `.biblatex`, `.yaml` / `.yml`, `.ris`** — se convierten con Pandoc WASM (`pandoc.wasm` necesario, véase *Limitaciones conocidas (WASM)* abajo).  
+   - **Varios archivos**: una ruta por línea en el ajuste global; una lista YAML o wikilink(s) en el frontmatter de una nota.  
    - 🖥️ En **escritorio**: selector de archivos o ruta absoluta / relativa al cofre.  
-   - 📱 En **móvil**: ruta **relativa al cofre** (p. ej. `refs/bibliografia.bib`). El cuadro «abrir archivo» solo está en escritorio.
+   - 📱 En **móvil**: ruta **relativa al cofre** (p. ej. `refs/bibliografia.bib`). El cuadro «abrir archivo» solo está en escritorio.  
+   - El `bibliography` del frontmatter de una nota puede **reemplazar** (por defecto) o **fusionarse con** la biblioteca global — véase **Fusionar la bibliografía de la nota con la biblioteca global**.
 
 2. **🎨 Estilo de cita (CSL)** *(opcional)*  
    Lista integrada o archivo `.csl` (ruta o URL), eventualmente sobrescrito por el frontmatter (`bibliography`, `csl`, `lang`, etc.).
@@ -72,6 +189,11 @@ Muestra en el panel lateral una lista de referencias formateada para cada clave 
    En los ajustes del plugin: idioma de las etiquetas (ajustes, editor de fichas, panel lateral dedicado).
 
 ## 📚 Zotero (opcional)
+
+> **¿Local-first?** La integración con Zotero es totalmente opcional en este fork. Puede
+> usar solo archivos de bibliografía locales y aun así obtener enlaces **Abrir en Zotero**
+> funcionales cuando sus claves de cita son claves de elemento de Zotero — sin clave API
+> (véase [Funciones del fork](#-funciones-del-fork--flujos-local-first)).
 
 ### 🔗 Better BibTeX / flujo local
 
@@ -124,7 +246,8 @@ Pandoc WASM se ejecuta en un entorno aislado: sin acceso de red arbitrario ni co
 | | |
 | --- | --- |
 | 🌐 **l'Atelier** | [atelier.atechnologie.fr](https://atelier.atechnologie.fr/) |
-| 📦 **Repositorio** | [github.com/Atelier-Recherche/pandocit](https://github.com/Atelier-Recherche/pandocit) |
+| 📦 **Repositorio del fork** | [github.com/ancaemcken/pandocit](https://github.com/ancaemcken/pandocit) |
+| ⬆️ **Original** | [github.com/Atelier-Recherche/pandocit](https://github.com/Atelier-Recherche/pandocit) |
 | 📄 **Pandoc** | [pandoc.org](https://pandoc.org/) — [Releases / pandoc.wasm 3.9](https://github.com/jgm/pandoc/releases) |
 | 🎓 **CSL** | [citationstyles.org](https://citationstyles.org/) |
 
