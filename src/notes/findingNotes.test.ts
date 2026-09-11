@@ -3,6 +3,7 @@ import {
   buildFindingNoteContent,
   buildFindingNoteIndex,
   embeddedNoteNames,
+  findingNoteCitekeyInFolder,
   findingNoteLinkName,
   nextFindingNoteIndex,
   noteBaseName,
@@ -124,5 +125,28 @@ describe('buildFindingNoteIndex', () => {
     expect(nextFindingNoteIndex(idx.get('grieve1971') ?? [])).toBe(2);
     expect(nextFindingNoteIndex(idx.get('smith-2020') ?? [])).toBe(1);
     expect(nextFindingNoteIndex([])).toBe(0);
+  });
+});
+
+describe('findingNoteCitekeyInFolder', () => {
+  it('extracts the citekey of a finding note within the folder', () => {
+    expect(findingNoteCitekeyInFolder('_notes/grieve1971-0.md', '_notes')).toBe(
+      'grieve1971'
+    );
+    expect(findingNoteCitekeyInFolder('_notes/smith-2020-1.md', '_notes')).toBe(
+      'smith-2020'
+    );
+    // subfolders included
+    expect(findingNoteCitekeyInFolder('_notes/sub/deep-2.md', '_notes')).toBe('deep');
+  });
+
+  it('returns null outside the folder or without an index suffix', () => {
+    expect(findingNoteCitekeyInFolder('other/elsewhere-0.md', '_notes')).toBeNull();
+    expect(findingNoteCitekeyInFolder('_notes/notindexed.md', '_notes')).toBeNull();
+    expect(findingNoteCitekeyInFolder('_notes/-0.md', '_notes')).toBeNull();
+  });
+
+  it('treats a blank folder as the whole vault', () => {
+    expect(findingNoteCitekeyInFolder('other/elsewhere-0.md', '')).toBe('elsewhere');
   });
 });

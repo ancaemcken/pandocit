@@ -105,6 +105,28 @@ export function nextFindingNoteIndex(notes: FindingNoteRef[]): number {
   return i;
 }
 
+/**
+ * Citekey d'une note de lecture (`_notes/grieve1971-0.md` → `grieve1971`) si `path` est
+ * bien `<citekey>-<n>.md` dans `folder` (sous-dossiers inclus ; `folder` vide = tout le
+ * coffre), sinon `null`.
+ *
+ * Sert à exclure de la liste « non utilisées » l'entrée de la note courante : sans cela,
+ * créer ou insérer une note de lecture depuis sa propre note la placerait à l'intérieur
+ * d'elle-même (boucle).
+ */
+export function findingNoteCitekeyInFolder(
+  path: string,
+  folder: string
+): string | null {
+  const norm = (folder ?? '').trim().replace(/^\/+|\/+$/g, '');
+  const slash = path.lastIndexOf('/');
+  const dir = slash < 0 ? '' : path.slice(0, slash);
+  const inFolder = !norm || dir === norm || dir.startsWith(`${norm}/`);
+  if (!inFolder) return null;
+  const m = /^(.*)-(\d+)$/.exec(noteBaseName(path));
+  return m && m[1] ? m[1] : null;
+}
+
 function yamlString(value: string): string {
   const flat = value.replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   return `"${flat}"`;

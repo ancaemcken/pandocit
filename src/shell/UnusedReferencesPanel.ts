@@ -10,6 +10,7 @@ import {
   buildFindingNoteContent,
   buildFindingNoteIndex,
   embeddedNoteNames,
+  findingNoteCitekeyInFolder,
   findingNoteFileName,
   nextFindingNoteIndex,
   normalizeNoteName,
@@ -345,9 +346,16 @@ export class UnusedReferencesPanel {
       return;
     }
     const notesEnabled = !!this.folder;
+    // Si la note courante est elle-même une note de lecture, on retire son entrée du
+    // scope : sinon « Créer une note » / « Inclure au curseur » insérerait la note à
+    // l'intérieur d'elle-même (boucle).
+    const ownPrefix = notesEnabled
+      ? findingNoteCitekeyInFolder(this.activeFilePath ?? '', this.folder)
+      : null;
     const rows: Row[] = [];
     for (const entry of this.data.entries) {
       if (!entry?.id) continue;
+      if (ownPrefix && notePrefix(entry.id) === ownPrefix) continue;
       const refs = this.notesIndex.get(notePrefix(entry.id)) ?? [];
       const notes: RowNote[] = refs.map((ref) => ({
         ref,
