@@ -1,1 +1,1 @@
-bc093bb revert(transclusions): restore regex expansion for predictable citation resolution
+20cf7ef feat(bib): optionally strip abstracts from CSL JSON bibliography files
