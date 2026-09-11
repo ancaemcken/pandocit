@@ -3,6 +3,7 @@ import { MarkdownView, Notice, setIcon } from 'obsidian';
 import type { PartialCSLEntry } from '../bib/types';
 import { looksLikeZoteroItemKey } from '../bib/bibliographyEntries';
 import { zoteroItemSelectUri, DEFAULT_ZOTERO_PORT } from '../bib/helpers';
+import { insertTextInActiveMarkdownNote } from '../helpers';
 import { t } from '../lang/helpers';
 import type ReferenceList from '../main';
 import { isDesktop } from '../platformAdapter';
@@ -264,6 +265,23 @@ export class UnusedReferencesPanel {
     }
 
     const actions = rowEl.createDiv({ cls: 'pwc-zotero-library__actions' });
+    const insertBtn = actions.createEl('button', {
+      cls: 'clickable-icon pwc-zotero-library__btn-edit',
+      attr: {
+        type: 'button',
+        'aria-label': t('Insert citekey'),
+        title: t('Insert citekey'),
+      },
+    });
+    setIcon(insertBtn, 'lucide-quote');
+    insertBtn.addEventListener('click', () => {
+      if (
+        insertTextInActiveMarkdownNote(this.plugin.app, `[@${entry.id}]`)
+      ) {
+        return;
+      }
+      new Notice(t('Open a markdown note to insert citations'));
+    });
     if (urlRaw) {
       const urlBtn = actions.createEl('button', {
         cls: 'clickable-icon pwc-zotero-library__btn-edit',
