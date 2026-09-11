@@ -1,5 +1,4 @@
 import type { App } from 'obsidian';
-import { embeddedNotes } from './embeds';
 
 /**
  * Note markdown — chemin + extension suffisent ici. On évite `instanceof TFile`
@@ -14,13 +13,6 @@ const MAX_DEPTH = 16;
  * chaque note embarquée est remplacée par son propre contenu brut, afin que les
  * citations écrites dans les notes transcluses soient traitées avec la note courante
  * (liste de références, cache citeproc).
- *
- * Les transclusions sont détectées via le cache d'Obsidian (`embeddedNotes`), pas en
- * analysant le texte. L'offset du cache sert d'abord, mais si le contenu fourni ne
- * coïncide pas exactement avec celui analysé (édition non enregistrée, fins de ligne
- * CRLF…) on retrouve le marqueur `original` par recherche textuelle : le cache garde
- * l'autorité (pas de faux positifs dans les blocs de code) et l'expansion reste robuste
- * aux décalages d'offsets.
  *
  * Anti-cycle (ensemble des fichiers déjà dépliés) + borne de profondeur. Limites v1 :
  * les transclusions à sous-section (`![[Note#titre]]`, `![[Note#^bloc]]`) et les
@@ -40,55 +32,54 @@ export async function expandTransclusions(
   ): Promise<string> => {
     if (depth > MAX_DEPTH) return text;
 
-    const edits: { start: number; end: number; text: string }[] = [];
-    let cursor = 0;
+    let out = '';
+    let last = 0;
+    const re = /!\[\[([^\[\]]+)\]\]/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      out += text.slice(last, m.index);
+      last = m.index + m[0].length;
 
-    for (const note of embeddedNotes(app, from)) {
-      // Sous-sections : laissées littérales (v1).
-      if (note.subpath) continue;
-      if (seen.has(note.file.path)) continue;
-
-      // Offset du cache s'il tombe bien sur le marqueur, sinon recherche du texte du
-      // marqueur (robuste aux décalages cache/contenu).
-      let start = note.start;
-      let end = note.end;
-      if (
-        start < 0 ||
-        end <= start ||
-        end > text.length ||
-        text.slice(start, end) !== note.original
-      ) {
-        if (!note.original) continue;
-        const at = text.indexOf(note.original, cursor);
-        if (at < 0) continue;
-        start = at;
-        end = at + note.original.length;
-      }
-      cursor = end;
-      seen.add(note.file.path);
-
-      let inner: string;
-      try {
-        const read = app.vault.cachedRead as (f: unknown) => Promise<string>;
-        inner = await read(note.file);
-      } catch {
-        seen.delete(note.file.path);
+      const raw = m[1];
+      const noAlias = raw.split('|')[0].trim();
+      // Sous-section (titre ou bloc) : non déplié en v1.
+      const hasSubpath = noAlias.includes('#');
+      const link = (hasSubpath ? noAlias.split('#')[0] : noAlias).trim();
+      if (!link || hasSubpath) {
+        out += m[0];
         continue;
       }
 
-      edits.push({
-        start,
-        end,
-        text: `\n${await expand(note.file, inner, depth + 1)}\n`,
-      });
-    }
+      let dest: MarkdownLike | null = null;
+      try {
+        const hit = app.metadataCache.getFirstLinkpathDest(link, from.path);
+        if (hit && typeof hit.path === 'string' && hit.extension === 'md') {
+          dest = hit as unknown as MarkdownLike;
+        }
+      } catch {
+        dest = null;
+      }
+      if (!dest || seen.has(dest.path)) {
+        out += m[0];
+        continue;
+      }
 
-    // Remplace de la fin vers le début pour garder les offsets valides.
-    edits.sort((a, b) => b.start - a.start);
-    let out = text;
-    for (const ed of edits) {
-      out = out.slice(0, ed.start) + ed.text + out.slice(ed.end);
+      seen.add(dest.path);
+      let inner: string;
+      try {
+        const read = app.vault.cachedRead as (
+          f: MarkdownLike
+        ) => Promise<string>;
+        inner = await read(dest);
+      } catch {
+        seen.delete(dest.path);
+        out += m[0];
+        continue;
+      }
+
+      out += `\n${await expand(dest, inner, depth + 1)}\n`;
     }
+    out += text.slice(last);
     return out;
   };
 
