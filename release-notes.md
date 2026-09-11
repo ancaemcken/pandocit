@@ -1,1 +1,1 @@
-b5e5f92 feat(library): Open in Zotero for local bib entries via item-key URI (works without API sync / on mobile)
+2d61ffc feat: support multiple bibliography files (frontmatter list and global setting, one path per line)
