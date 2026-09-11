@@ -1,1 +1,1 @@
-2d61ffc feat: support multiple bibliography files (frontmatter list and global setting, one path per line)
+0ad62b4 docs: fork notice + local-first feature docs in all READMEs
