@@ -8,6 +8,7 @@ import {
   insertTextInActiveMarkdownNote,
   isAbsoluteFilesystemPath,
   normalizeVaultRelativePath,
+  openAppUri,
 } from './helpers';
 import { openVaultPdfImportModal } from './zoteroImport/VaultPdfImportModal';
 import { resolveVaultPdfAbsolutePath } from './zoteroApi/vaultPaths';
@@ -27,6 +28,8 @@ import {
   parseStorageItemKey,
   zoteroUriForStorageKey,
 } from './zoteroApi/zoteroMerge';
+import { zoteroUriForCitekey } from './zoteroApi/zoteroUris';
+import { zoteroItemSelectUri, DEFAULT_ZOTERO_PORT } from './bib/helpers';
 import { getPath, isDesktop } from './platformAdapter';
 import { itemTypeBadgeLabel } from './zoteroItemTypeBadge';
 import {
@@ -1136,6 +1139,28 @@ export class ZoteroLibraryPanel {
     return zoteroUriForStorageKey(itemKey, this.plugin.settings);
   }
 
+  private zoteroUriForLibraryCitekey(citekey: string): string | null {
+    const settings = this.plugin.settings;
+    return zoteroUriForCitekey(citekey, {
+      link: this.plugin.bibManager.zCitekeyToLinks.get(citekey) ?? null,
+      libraryType: settings.zoteroApiLibraryType,
+      groupId: settings.zoteroApiGroupId ?? null,
+    });
+  }
+
+  private async openBibliographyCitekeyInZotero(
+    citekey: string,
+    staticUri: string | null
+  ): Promise<void> {
+    const uri =
+      staticUri ??
+      (isDesktop()
+        ? await zoteroItemSelectUri(DEFAULT_ZOTERO_PORT, citekey)
+        : null);
+    if (uri) openAppUri(uri);
+    else new Notice(t('Could not open in Zotero'));
+  }
+
   private attachmentLinkLabel(st: StoredZoteroItem): string {
     const d = st.data;
     const fn =
@@ -1266,7 +1291,7 @@ export class ZoteroLibraryPanel {
           chip.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            window.open(link.href);
+            openAppUri(link.href);
           });
         } else if (link.kind === 'local') {
           const chip = group.createEl('button', {
@@ -1330,6 +1355,25 @@ export class ZoteroLibraryPanel {
           }
           new Notice(t('Open a markdown note to insert citations'));
         });
+
+        // Lien Zotero pour les entrées de bibliothèque locale : clé d'élément (8 car.)
+        // → `zotero://select/library/items/<clé>` (fonctionne aussi sur mobile),
+        // sans dépendre de l'API Zotero. Repli Better BibTeX sur desktop.
+        const staticUri = this.zoteroUriForLibraryCitekey(citekey);
+        if (staticUri || isDesktop()) {
+          const zotBtn = actions.createEl('button', {
+            cls: 'clickable-icon',
+            attr: {
+              type: 'button',
+              'aria-label': t('Open in Zotero'),
+              title: t('Open in Zotero'),
+            },
+          });
+          setIcon(zotBtn, 'library');
+          zotBtn.addEventListener('click', () =>
+            void this.openBibliographyCitekeyInZotero(citekey, staticUri)
+          );
+        }
       }
       return;
     }
