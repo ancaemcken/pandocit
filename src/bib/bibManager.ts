@@ -94,7 +94,7 @@ interface ScopedBibCacheEntry {
   mtime: number | null;
 }
 
-function getScopedSettings(file: TFile): ScopedSettings {
+export function getScopedSettings(file: TFile): ScopedSettings {
   const metadata = app.metadataCache.getFileCache(file);
   const output: ScopedSettings = {};
 

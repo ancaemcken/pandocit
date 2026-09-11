@@ -158,6 +158,21 @@ export default {
   'Cited, no notes color': 'Couleur « citée, sans note »',
   'Color for entries cited in the note but without any finding note.':
     'Couleur des entrées citées dans la note mais sans note de lecture.',
+  'Strip abstracts from bibliography files':
+    'Supprimer les résumés des fichiers de bibliographie',
+  'Strip abstracts from JSON bibliography files on startup':
+    'Supprimer les résumés des fichiers JSON au démarrage',
+  'Removes the abstract field from CSL JSON bibliography files (global and per-note) to save disk and memory. Only files changed since the last cleanup are processed. JSON only.':
+    'Supprime le champ abstract des fichiers de bibliographie CSL JSON (globale et par note) pour économiser espace disque et mémoire. Seuls les fichiers modifiés depuis le dernier nettoyage sont traités. JSON uniquement.',
+  'Clean up now': 'Nettoyer maintenant',
+  'Cleaning…': 'Nettoyage…',
+  'Nothing to clean': 'Rien à nettoyer',
+  'Bibliography cleanup': 'Nettoyage de la bibliographie',
+  'file(s)': 'fichier(s)',
+  'abstract(s) removed': 'résumé(s) supprimé(s)',
+  saved: 'économisé',
+  skipped: 'ignoré(s)',
+  'error(s)': 'erreur(s)',
   'Set a notes folder in plugin settings':
     'Définir un dossier de notes dans les réglages du plugin',
   'This note has no bibliography file':

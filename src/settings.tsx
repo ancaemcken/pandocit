@@ -30,6 +30,7 @@ import {
   isFormattedCitationsEnabled,
   setFormattedCitationsEnabled,
 } from './citationUi';
+import { runBibAbstractCleanup } from './bib/stripAbstracts';
 
 export const DEFAULT_SETTINGS: ReferenceListSettings = {
   pluginUiLocale: 'en',
@@ -41,6 +42,8 @@ export const DEFAULT_SETTINGS: ReferenceListSettings = {
   showCitekeyTooltips: true,
   underlineCitekeys: false,
   mergeScopedBibliography: false,
+  stripAbstractsOnStartup: false,
+  bibAbstractsCleaned: {},
   unusedCountTransclusions: true,
   unusedMergeTranscludedBibs: false,
   unusedNotesFolder: '',
@@ -62,6 +65,10 @@ export interface ReferenceListSettings {
   pathToBibliography?: string;
   /** Fusionne le fichier `bibliography` de la note avec la bibliothèque globale/Zotero. */
   mergeScopedBibliography?: boolean;
+  /** Retire les `abstract` des fichiers CSL JSON de bibliographie au démarrage. */
+  stripAbstractsOnStartup?: boolean;
+  /** Marqueur interne : mtime + taille des fichiers déjà nettoyés (évite de les relire). */
+  bibAbstractsCleaned?: Record<string, { mtime: number; size: number }>;
   /** Onglet « non utilisées » : compter les citations des notes transcluses comme utilisées. */
   unusedCountTransclusions?: boolean;
   /** Onglet « non utilisées » : inclure les bibliographies des notes transcluses dans la liste. */
@@ -302,6 +309,34 @@ export class ReferenceListSettingsTab extends PluginSettingTab {
             this.plugin.saveSettings();
           })
       );
+
+    new Setting(containerEl)
+      .setName(t('Strip abstracts from JSON bibliography files on startup'))
+      .setDesc(
+        t(
+          'Removes the abstract field from CSL JSON bibliography files (global and per-note) to save disk and memory. Only files changed since the last cleanup are processed. JSON only.'
+        )
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(!!this.plugin.settings.stripAbstractsOnStartup)
+          .onChange((value) => {
+            this.plugin.settings.stripAbstractsOnStartup = value;
+            this.plugin.saveSettings();
+          })
+      )
+      .addButton((button) => {
+        button.setButtonText(t('Clean up now')).onClick(async () => {
+          button.setDisabled(true);
+          button.setButtonText(t('Cleaning…'));
+          try {
+            await runBibAbstractCleanup(this.plugin);
+          } finally {
+            button.setDisabled(false);
+            button.setButtonText(t('Clean up now'));
+          }
+        });
+      });
 
     new Setting(containerEl)
       .setName(t('Notes folder'))

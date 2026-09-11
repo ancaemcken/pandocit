@@ -35,6 +35,7 @@ import { writeBibtexExportToVault } from './zoteroApi/zoteroToBibtex';
 import { PromiseCapability, getVaultRoot } from './helpers';
 import { getPath } from './platformAdapter';
 import { BibManager } from './bib/bibManager';
+import { runBibAbstractCleanup } from './bib/stripAbstracts';
 import { CiteSuggest } from './citeSuggest/citeSuggest';
 import { expandTransclusions } from './transclusions';
 import { parseBibliographyPaths } from './bib/bibPaths';
@@ -182,6 +183,14 @@ export default class ReferenceList extends Plugin {
           return;
         }
         await openInPandocitReader(this, file);
+      },
+    });
+
+    this.addCommand({
+      id: 'pwc-strip-bib-abstracts',
+      name: t('Strip abstracts from bibliography files'),
+      callback: async () => {
+        await runBibAbstractCleanup(this);
       },
     });
 
@@ -352,6 +361,10 @@ export default class ReferenceList extends Plugin {
 
       this.setStatusBarIdle();
       this.processReferences();
+
+      if (this.settings.stripAbstractsOnStartup) {
+        void runBibAbstractCleanup(this, { mode: 'auto' });
+      }
     })();
   }
 
