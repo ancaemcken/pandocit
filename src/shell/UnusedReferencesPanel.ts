@@ -1,9 +1,8 @@
 import { MarkdownView, Notice, TFile, setIcon } from 'obsidian';
 
 import type { PartialCSLEntry } from '../bib/types';
-import { looksLikeZoteroItemKey } from '../bib/bibliographyEntries';
 import { zoteroItemSelectUri, DEFAULT_ZOTERO_PORT } from '../bib/helpers';
-import { insertTextInActiveMarkdownNote } from '../helpers';
+import { insertTextInActiveMarkdownNote, openAppUri } from '../helpers';
 import { t } from '../lang/helpers';
 import type ReferenceList from '../main';
 import { isDesktop } from '../platformAdapter';
@@ -17,7 +16,7 @@ import {
   notePrefix,
   type FindingNoteRef,
 } from '../notes/findingNotes';
-import { zoteroUriForStorageKey } from '../zoteroApi/zoteroMerge';
+import { zoteroUriForCitekey } from '../zoteroApi/zoteroUris';
 
 const BATCH_SIZE = 300;
 
@@ -572,16 +571,21 @@ export class UnusedReferencesPanel {
       });
     }
 
-    const zotBtn = actions.createEl('button', {
-      cls: 'clickable-icon pwc-zotero-library__btn-edit',
-      attr: {
-        type: 'button',
-        'aria-label': t('Open in Zotero'),
-        title: t('Open in Zotero'),
-      },
-    });
-    setIcon(zotBtn, 'library');
-    zotBtn.addEventListener('click', () => void this.openInZotero(entry, zotBtn));
+    const zotUri = this.zoteroUriForEntry(entry);
+    // Bouton affiché quand un lien est constructible — ou sur desktop, où un repli
+    // Better BibTeX peut résoudre un citekey non-Zotero.
+    if (zotUri || isDesktop()) {
+      const zotBtn = actions.createEl('button', {
+        cls: 'clickable-icon pwc-zotero-library__btn-edit',
+        attr: {
+          type: 'button',
+          'aria-label': t('Open in Zotero'),
+          title: t('Open in Zotero'),
+        },
+      });
+      setIcon(zotBtn, 'library');
+      zotBtn.addEventListener('click', () => void this.openInZotero(entry, zotBtn));
+    }
   }
 
   // --- Actions ---------------------------------------------------------
@@ -700,14 +704,13 @@ export class UnusedReferencesPanel {
     }
   }
 
-  private staticZoteroUri(entry: PartialCSLEntry): string | null {
-    const id = entry.id;
-    const linked = this.plugin.bibManager.zCitekeyToLinks.get(id);
-    if (linked) return linked;
-    if (looksLikeZoteroItemKey(id)) {
-      return zoteroUriForStorageKey(id, this.plugin.settings);
-    }
-    return null;
+  private zoteroUriForEntry(entry: PartialCSLEntry): string | null {
+    const settings = this.plugin.settings;
+    return zoteroUriForCitekey(entry.id, {
+      link: this.plugin.bibManager.zCitekeyToLinks.get(entry.id) ?? null,
+      libraryType: settings.zoteroApiLibraryType,
+      groupId: settings.zoteroApiGroupId ?? null,
+    });
   }
 
   private async openInZotero(
@@ -715,14 +718,13 @@ export class UnusedReferencesPanel {
     btn: HTMLButtonElement
   ): Promise<void> {
     const uri =
-      this.staticZoteroUri(entry) ??
+      this.zoteroUriForEntry(entry) ??
       (isDesktop()
         ? await zoteroItemSelectUri(DEFAULT_ZOTERO_PORT, entry.id)
         : null);
     if (uri) {
       btn.setAttribute('aria-disabled', 'true');
-      const w = typeof activeWindow !== 'undefined' ? activeWindow : window;
-      w.open(uri, '_blank');
+      openAppUri(uri);
     } else {
       new Notice(t('Could not open in Zotero'));
     }

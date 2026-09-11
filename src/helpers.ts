@@ -467,3 +467,24 @@ export function insertTextInActiveMarkdownNote(app: App, text: string): boolean 
 
   return false;
 }
+
+/**
+ * Ouvre une URI applicative (ex. `zotero://…`) depuis un clic utilisateur.
+ *
+ * Une ancre cliquée est plus fiable que `window.open` pour les schémas personnalisés
+ * dans une WebView (Obsidian iOS), où `window.open` peut être ignoré.
+ */
+export function openAppUri(uri: string): void {
+  const w = (typeof activeWindow !== 'undefined' ? activeWindow : window) as Window;
+  try {
+    const doc = w.document ?? document;
+    const link = doc.createElement('a');
+    link.href = uri;
+    link.style.display = 'none';
+    doc.body.appendChild(link);
+    link.click();
+    link.remove();
+  } catch {
+    w.open(uri, '_blank');
+  }
+}
