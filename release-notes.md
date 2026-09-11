@@ -1,1 +1,1 @@
-b9a38dd refactor(transclusions): detect embeds via metadata cache; avoid per-citation doc toString
+9957823 fix(transclusions): make embed splicing robust to cache/content offset drift
