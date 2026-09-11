@@ -27,7 +27,7 @@ import {
 import { BibManager, FileCache } from './bib/bibManager';
 import equal from 'fast-deep-equal';
 import { TooltipManager } from './tooltip';
-import { citationInsideInlineFootnote } from './footnoteUtils';
+import { citationInsideInlineFootnoteAt } from './footnoteUtils';
 import { formatEmbeddedCitations } from './markdownPostprocessor';
 
 const ignoreListRegEx = /code|math|templater|hashtag/;
@@ -300,9 +300,8 @@ export const citeKeyPlugin = ViewPlugin.fromClass(
                 linkText = view.state.sliceDoc(centerNode.from, centerNode.to);
               }
 
-              const doc = view.state.doc.toString();
-              const insideInlineFootnote = citationInsideInlineFootnote(
-                doc,
+              const insideInlineFootnote = citationInsideInlineFootnoteAt(
+                view.state,
                 tree,
                 start,
                 end

@@ -9,6 +9,7 @@ import {
   parseBibliographyPaths,
 } from './bibPaths';
 import { expandTransclusions } from 'src/transclusions';
+import { embeddedMarkdownFiles } from 'src/embeds';
 import {
   bibToCSL,
   getBibPath,
@@ -166,24 +167,8 @@ function embeddedBibliographyPaths(root: TFile): string[] {
   const out: string[] = [];
   const seen = new Set<string>([root.path]);
   const visit = (file: TFile): void => {
-    let embeds;
-    try {
-      embeds = app.metadataCache.getFileCache(file)?.embeds;
-    } catch {
-      embeds = undefined;
-    }
-    if (!embeds?.length) return;
-    for (const embed of embeds) {
-      const link = embed.link?.split('#')[0]?.trim();
-      if (!link) continue;
-      let dest: TFile | null = null;
-      try {
-        const hit = app.metadataCache.getFirstLinkpathDest(link, file.path);
-        if (hit instanceof TFile && hit.extension === 'md') dest = hit;
-      } catch {
-        continue;
-      }
-      if (!dest || seen.has(dest.path)) continue;
+    for (const dest of embeddedMarkdownFiles(app, file)) {
+      if (seen.has(dest.path)) continue;
       seen.add(dest.path);
       const s = getScopedSettings(dest);
       if (s?.bibliography?.length) out.push(...s.bibliography);
@@ -603,15 +588,13 @@ export class BibManager {
 
   /**
    * Données de l'onglet « non utilisées » : entrées candidates du scope local de la
-   * note, ensemble des citekeys citées dans le document, et le contenu ayant servi à
-   * les repérer (transclusions incluses le cas échéant).
+   * note et ensemble des citekeys citées dans le document (transclusions incluses le
+   * cas échéant).
    *
    * @param opts.countTransclusions  comptabiliser aussi les citations des notes
    *   transcluses (défaut : réglage `unusedCountTransclusions`).
    * @param opts.mergeTranscludedBibs  inclure les bibliographies des notes transcluses
    *   dans les entrées candidates (défaut : réglage `unusedMergeTranscludedBibs`).
-   * @param opts.content  contenu de la note fourni par l'appelant (tampon d'éditeur
-   *   non sauvegardé) ; sinon lecture du coffre.
    *
    * Retourne null si aucune bibliographie locale n'est disponible.
    */
@@ -620,13 +603,10 @@ export class BibManager {
     opts?: {
       countTransclusions?: boolean;
       mergeTranscludedBibs?: boolean;
-      content?: string;
     }
   ): Promise<{
     entries: PartialCSLEntry[];
     cited: Set<string>;
-    content: string;
-    rawContent: string;
   } | null> {
     const settings = getScopedSettings(file);
     const countTransclusions =
@@ -650,8 +630,8 @@ export class BibManager {
     const pool = ctx?.bibCache ?? null;
     if (!pool) return null;
 
-    // Usage : texte de la note, éventuellement enrichi du contenu transclus.
-    const raw = opts?.content ?? (await this.plugin.app.vault.cachedRead(file));
+    // Usage : texte enregistré de la note, éventuellement enrichi du contenu transclus.
+    const raw = await this.plugin.app.vault.cachedRead(file);
     const content = countTransclusions
       ? await expandTransclusions(this.plugin.app, file, raw)
       : raw;
@@ -672,8 +652,6 @@ export class BibManager {
     return {
       entries: Array.from(pool.values()),
       cited,
-      content,
-      rawContent: raw,
     };
   }
 

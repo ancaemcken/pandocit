@@ -1,5 +1,6 @@
 import { Tree } from '@lezer/common';
 import { tokenClassNodeProp } from '@codemirror/language';
+import type { EditorState } from '@codemirror/state';
 
 /** Position of the closing `]` for an inline footnote starting at `caretPos` (`^`). */
 export function findInlineFootnoteEnd(doc: string, caretPos: number): number {
@@ -91,6 +92,31 @@ export function citationInsideInlineFootnote(
   return (
     isInsideInlineFootnote(doc, from) ||
     isInsideInlineFootnote(doc, to) ||
+    isInFootnoteSyntaxNode(tree, from)
+  );
+}
+
+/**
+ * Comme `citationInsideInlineFootnote`, mais n'extrait que la/les ligne(s) concernée(s)
+ * au lieu de sérialiser tout le document : coût O(ligne) au lieu de O(document), ce qui
+ * évite un `doc.toString()` complet par citation dans les notes très longues.
+ *
+ * Les notes de bas de page en ligne (`^[…]`) ne traversent pas les sauts de ligne, donc
+ * la fenêtre suffit à la détection.
+ */
+export function citationInsideInlineFootnoteAt(
+  state: EditorState,
+  tree: Tree,
+  from: number,
+  to: number
+): boolean {
+  const end = Math.max(from, to);
+  const lineFrom = state.doc.lineAt(from).from;
+  const lineTo = state.doc.lineAt(end).to;
+  const win = state.sliceDoc(lineFrom, lineTo);
+  return (
+    isInsideInlineFootnote(win, from - lineFrom) ||
+    isInsideInlineFootnote(win, end - lineFrom) ||
     isInFootnoteSyntaxNode(tree, from)
   );
 }

@@ -15,6 +15,25 @@ function makeApp(files: Record<string, string>): App {
     }
     return null;
   };
+  // Le cache d'Obsidian fournit les transclusions (liens + offsets) ; le mock les
+  // recalcule depuis le contenu pour rester proche du comportement réel.
+  const embedsFor = (content: string) => {
+    const out: unknown[] = [];
+    const re = /!\[\[([^\[\]]+)\]\]/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content))) {
+      out.push({
+        link: m[1],
+        original: m[0],
+        displayText: m[1],
+        position: {
+          start: { line: 0, col: 0, offset: m.index },
+          end: { line: 0, col: 0, offset: m.index + m[0].length },
+        },
+      });
+    }
+    return out;
+  };
   return {
     vault: {
       cachedRead: async (f: { path: string }) => files[f.path] ?? '',
@@ -22,6 +41,9 @@ function makeApp(files: Record<string, string>): App {
     metadataCache: {
       getFirstLinkpathDest: (link: string, fromPath: string) =>
         fileFor(link, fromPath),
+      getFileCache: (f: { path: string }) => ({
+        embeds: embedsFor(files[f.path] ?? ''),
+      }),
     },
   } as unknown as App;
 }

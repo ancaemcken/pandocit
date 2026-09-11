@@ -1,4 +1,5 @@
 import type { App } from 'obsidian';
+import { embeddedNotes } from './embeds';
 
 /**
  * Note markdown — chemin + extension suffisent ici. On évite `instanceof TFile`
@@ -13,6 +14,11 @@ const MAX_DEPTH = 16;
  * chaque note embarquée est remplacée par son propre contenu brut, afin que les
  * citations écrites dans les notes transcluses soient traitées avec la note courante
  * (liste de références, cache citeproc).
+ *
+ * Les transclusions sont détectées via le cache d'Obsidian (`embeddedNotes`), pas en
+ * analysant le texte. Les offsets du cache servent à remplacer chaque `![[…]]` par le
+ * contenu de la cible — le contenu fourni doit donc correspondre à celui qu'Obsidian a
+ * analysé (contenu enregistré du coffre).
  *
  * Anti-cycle (ensemble des fichiers déjà dépliés) + borne de profondeur. Limites v1 :
  * les transclusions à sous-section (`![[Note#titre]]`, `![[Note#^bloc]]`) et les
@@ -32,54 +38,40 @@ export async function expandTransclusions(
   ): Promise<string> => {
     if (depth > MAX_DEPTH) return text;
 
-    let out = '';
-    let last = 0;
-    const re = /!\[\[([^\[\]]+)\]\]/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(text))) {
-      out += text.slice(last, m.index);
-      last = m.index + m[0].length;
+    const edits: { start: number; end: number; text: string }[] = [];
 
-      const raw = m[1];
-      const noAlias = raw.split('|')[0].trim();
-      // Sous-section (titre ou bloc) : non déplié en v1.
-      const hasSubpath = noAlias.includes('#');
-      const link = (hasSubpath ? noAlias.split('#')[0] : noAlias).trim();
-      if (!link || hasSubpath) {
-        out += m[0];
-        continue;
-      }
+    for (const note of embeddedNotes(app, from)) {
+      // Sous-sections et positions inconnues : laissées littérales.
+      if (note.subpath || note.start < 0 || note.end < 0) continue;
+      // Le cache et le contenu doivent correspondre : si Obsidian a analysé une version
+      // plus récente que `content` (édition non enregistrée), les offsets sont faux et
+      // on laisse le marqueur littéral plutôt que de remplacer la mauvaise plage.
+      if (text.slice(note.start, note.end) !== note.original) continue;
+      if (seen.has(note.file.path)) continue;
+      seen.add(note.file.path);
 
-      let dest: MarkdownLike | null = null;
-      try {
-        const hit = app.metadataCache.getFirstLinkpathDest(link, from.path);
-        if (hit && typeof hit.path === 'string' && hit.extension === 'md') {
-          dest = hit as unknown as MarkdownLike;
-        }
-      } catch {
-        dest = null;
-      }
-      if (!dest || seen.has(dest.path)) {
-        out += m[0];
-        continue;
-      }
-
-      seen.add(dest.path);
       let inner: string;
       try {
-        const read = app.vault.cachedRead as (
-          f: MarkdownLike
-        ) => Promise<string>;
-        inner = await read(dest);
+        const read = app.vault.cachedRead as (f: unknown) => Promise<string>;
+        inner = await read(note.file);
       } catch {
-        seen.delete(dest.path);
-        out += m[0];
+        seen.delete(note.file.path);
         continue;
       }
 
-      out += `\n${await expand(dest, inner, depth + 1)}\n`;
+      edits.push({
+        start: note.start,
+        end: note.end,
+        text: `\n${await expand(note.file, inner, depth + 1)}\n`,
+      });
     }
-    out += text.slice(last);
+
+    // Remplace de la fin vers le début pour garder les offsets valides.
+    edits.sort((a, b) => b.start - a.start);
+    let out = text;
+    for (const ed of edits) {
+      out = out.slice(0, ed.start) + ed.text + out.slice(ed.end);
+    }
     return out;
   };
 

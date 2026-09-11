@@ -9,7 +9,6 @@ import { isDesktop } from '../platformAdapter';
 import {
   buildFindingNoteContent,
   buildFindingNoteIndex,
-  embeddedNoteNames,
   findingNoteCitekeyInFolder,
   findingNoteFileName,
   nextFindingNoteIndex,
@@ -19,6 +18,7 @@ import {
   notePrefix,
   type FindingNoteRef,
 } from '../notes/findingNotes';
+import { embeddedMarkdownFiles } from '../embeds';
 import { zoteroUriForCitekey } from '../zoteroApi/zoteroUris';
 
 const BATCH_SIZE = 300;
@@ -64,8 +64,6 @@ export class UnusedReferencesPanel {
   private data: {
     entries: PartialCSLEntry[];
     cited: Set<string>;
-    content: string;
-    rawContent: string;
   } | null = null;
   private notesIndex = new Map<string, FindingNoteRef[]>();
   private embeddedNames = new Set<string>();
@@ -261,20 +259,6 @@ export class UnusedReferencesPanel {
     return activeView?.file ?? this.plugin.lastActiveMarkdownFile;
   }
 
-  private liveContent(file: TFile): string | undefined {
-    // Le volet « non utilisées » peut avoir le focus : `getActiveViewOfType` est alors
-    // null — on cible l'éditeur ouvert sur CE fichier via les feuilles de la zone
-    // principale (même logique que l'insertion).
-    let found: string | undefined;
-    this.plugin.app.workspace.iterateRootLeaves((leaf) => {
-      const v = leaf.view;
-      if (v instanceof MarkdownView && v.file === file && v.editor) {
-        found = v.editor.getValue();
-      }
-    });
-    return found;
-  }
-
   /** Insère dans l'éditeur ouvert sur la note listée (repli : note active). */
   private insertIntoActiveNote(text: string): boolean {
     const file = this.resolveFile();
@@ -310,7 +294,6 @@ export class UnusedReferencesPanel {
           this.plugin.settings.unusedCountTransclusions ?? true,
         mergeTranscludedBibs:
           this.plugin.settings.unusedMergeTranscludedBibs ?? false,
-        content: this.liveContent(file),
       });
       if (file.path !== this.activeFilePath) return; // note changée entre-temps
       if (!data) {
@@ -322,9 +305,12 @@ export class UnusedReferencesPanel {
       this.notesIndex = this.folder
         ? buildFindingNoteIndex(this.markdownFiles(), this.folder)
         : new Map();
-      // Détection des embeds sur le contenu BRUT : l'expansion des transclusions
-      // remplace les marqueurs `![[note]]` par le contenu de la note.
-      this.embeddedNames = embeddedNoteNames(data.rawContent);
+      // Détection des embeds via le cache Obsidian (source fiable, blocs de code exclus).
+      this.embeddedNames = new Set(
+        embeddedMarkdownFiles(this.plugin.app, file).map((f) =>
+          normalizeNoteName(f.basename)
+        )
+      );
       this.rebuildRows();
     } catch (e) {
       console.error('[PandoCit] unused references', e);
