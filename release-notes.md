@@ -1,1 +1,1 @@
-dd279dc feat(unused): finding notes (create/embed), existing-notes collapsible, cited-no-notes filter + color
+e66746f fix(unused): detect embeds from raw content, deterministic insert target, next-free index from fresh scan, plain notes list
