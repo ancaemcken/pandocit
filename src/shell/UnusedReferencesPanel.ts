@@ -11,8 +11,10 @@ import {
   buildFindingNoteIndex,
   embeddedNoteNames,
   findingNoteFileName,
-  normalizeNoteName,
   nextFindingNoteIndex,
+  normalizeNoteName,
+  noteBaseName,
+  noteLinkPath,
   notePrefix,
   type FindingNoteRef,
 } from '../notes/findingNotes';
@@ -655,15 +657,18 @@ export class UnusedReferencesPanel {
     return file;
   }
 
-  private includeName(name: string): boolean {
-    if (this.embeddedNames.has(normalizeNoteName(name))) return true;
-    if (!this.insertLines([`![[${name}]]`])) return false;
-    this.embeddedNames.add(normalizeNoteName(name));
+  private includeName(path: string): boolean {
+    // Lien avec le chemin complet (dossier configuré + nom), sans extension : évite
+    // toute ambiguïté si un même nom existe ailleurs dans le coffre.
+    const key = normalizeNoteName(noteBaseName(path));
+    if (this.embeddedNames.has(key)) return true;
+    if (!this.insertLines([`![[${noteLinkPath(path)}]]`])) return false;
+    this.embeddedNames.add(key);
     return true;
   }
 
   private includeNote(ref: FindingNoteRef): void {
-    this.includeName(ref.name);
+    this.includeName(ref.path);
     this.rebuildRows();
     this.scheduleRefresh();
   }
@@ -671,7 +676,7 @@ export class UnusedReferencesPanel {
   private async createAndInclude(entry: PartialCSLEntry): Promise<void> {
     const file = await this.createNoteForEntry(entry);
     if (!file) return;
-    this.includeName(file.basename);
+    this.includeName(file.path);
     this.rebuildRows();
     this.scheduleRefresh();
   }
@@ -684,7 +689,7 @@ export class UnusedReferencesPanel {
       // Création en masse : uniquement l'index 0, jamais remplacé.
       let file = this.fileByIndex(id, 0);
       if (!file) file = await this.createNoteForEntry(row.entry, 0);
-      if (file) this.includeName(file.basename);
+      if (file) this.includeName(file.path);
     }
     this.selected.clear();
     this.rebuildRows();

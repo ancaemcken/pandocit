@@ -5,6 +5,8 @@ import {
   embeddedNoteNames,
   findingNoteLinkName,
   nextFindingNoteIndex,
+  noteBaseName,
+  noteLinkPath,
   notePrefix,
   normalizeNoteName,
 } from './findingNotes';
@@ -61,6 +63,12 @@ describe('note naming', () => {
 
   it('builds file and link names', () => {
     expect(findingNoteLinkName('smith-2020', 1)).toBe('smith-2020-1');
+  });
+
+  it('builds full embed link paths (folder + name, no extension)', () => {
+    expect(noteLinkPath('_notes/grieve1971-0.md')).toBe('_notes/grieve1971-0');
+    expect(noteLinkPath('grieve1971-0.md')).toBe('grieve1971-0');
+    expect(noteBaseName('_notes/sub/grieve1971-0.md')).toBe('grieve1971-0');
   });
 
   it('normalizes link names', () => {

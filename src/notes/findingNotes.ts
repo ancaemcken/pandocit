@@ -30,6 +30,17 @@ export function findingNoteLinkName(citekey: string, index: number): string {
   return `${notePrefix(citekey)}-${index}`;
 }
 
+/** Chemin de lien Obsidian d'un fichier de note (`_notes/x-0.md` → `_notes/x-0`). */
+export function noteLinkPath(path: string): string {
+  return path.replace(/\.md$/i, '');
+}
+
+/** Nom de base (sans chemin ni extension) d'un chemin de note. */
+export function noteBaseName(path: string): string {
+  const base = path.split('/').pop() ?? path;
+  return base.replace(/\.md$/i, '');
+}
+
 /** Clé normalisée pour comparer des noms de liens/notes (NFC, minuscules). */
 export function normalizeNoteName(name: string): string {
   return name.normalize('NFC').toLowerCase();
