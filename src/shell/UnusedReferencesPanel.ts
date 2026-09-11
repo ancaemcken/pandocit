@@ -10,6 +10,7 @@ import { isDesktop } from '../platformAdapter';
 import {
   buildFindingNoteContent,
   buildFindingNoteIndex,
+  embeddedNoteNames,
   findingNoteFileName,
   normalizeNoteName,
   nextFindingNoteIndex,
@@ -62,6 +63,7 @@ export class UnusedReferencesPanel {
     entries: PartialCSLEntry[];
     cited: Set<string>;
     content: string;
+    rawContent: string;
   } | null = null;
   private notesIndex = new Map<string, FindingNoteRef[]>();
   private embeddedNames = new Set<string>();
@@ -258,11 +260,36 @@ export class UnusedReferencesPanel {
   }
 
   private liveContent(file: TFile): string | undefined {
-    const activeView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
-    if (activeView?.file === file && activeView.editor) {
-      return activeView.editor.getValue();
+    // Le volet « non utilisées » peut avoir le focus : `getActiveViewOfType` est alors
+    // null — on cible l'éditeur ouvert sur CE fichier via les feuilles de la zone
+    // principale (même logique que l'insertion).
+    let found: string | undefined;
+    this.plugin.app.workspace.iterateRootLeaves((leaf) => {
+      const v = leaf.view;
+      if (v instanceof MarkdownView && v.file === file && v.editor) {
+        found = v.editor.getValue();
+      }
+    });
+    return found;
+  }
+
+  /** Insère dans l'éditeur ouvert sur la note listée (repli : note active). */
+  private insertIntoActiveNote(text: string): boolean {
+    const file = this.resolveFile();
+    if (file) {
+      let match: MarkdownView | null = null;
+      this.plugin.app.workspace.iterateRootLeaves((leaf) => {
+        const v = leaf.view;
+        if (v instanceof MarkdownView && v.file === file && v.editor) {
+          match = v;
+        }
+      });
+      if (match) {
+        (match as MarkdownView).editor.replaceSelection(text);
+        return true;
+      }
     }
-    return undefined;
+    return insertTextInActiveMarkdownNote(this.plugin.app, text);
   }
 
   async refresh(): Promise<void> {
@@ -293,7 +320,9 @@ export class UnusedReferencesPanel {
       this.notesIndex = this.folder
         ? buildFindingNoteIndex(this.markdownFiles(), this.folder)
         : new Map();
-      this.embeddedNames = this.collectEmbeddedNames(data.content);
+      // Détection des embeds sur le contenu BRUT : l'expansion des transclusions
+      // remplace les marqueurs `![[note]]` par le contenu de la note.
+      this.embeddedNames = embeddedNoteNames(data.rawContent);
       this.rebuildRows();
     } catch (e) {
       console.error('[PandoCit] unused references', e);
@@ -306,19 +335,6 @@ export class UnusedReferencesPanel {
       .getFiles()
       .filter((f) => f.extension === 'md')
       .map((f) => ({ path: f.path, name: f.basename }));
-  }
-
-  private collectEmbeddedNames(content: string): Set<string> {
-    const out = new Set<string>();
-    const re = /!\[\[([^\[\]]+)\]\]/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(content))) {
-      const link = m[1].split('#')[0].split('|')[0].trim();
-      if (!link) continue;
-      const base = link.split('/').pop() ?? link;
-      out.add(normalizeNoteName(base.replace(/\.md$/i, '')));
-    }
-    return out;
   }
 
   private rebuildRows(): void {
@@ -477,18 +493,13 @@ export class UnusedReferencesPanel {
     }
 
     if (row.notes.length) {
-      const det = meta.createEl('details', {
-        cls: 'pwc-zotero-library__details',
-      });
-      det.createEl('summary', {
-        cls: 'pwc-zotero-library__summary',
+      const noteList = meta.createDiv({ cls: 'pwc-unused__notes' });
+      noteList.createDiv({
+        cls: 'pwc-unused__notes-title',
         text: `${t('Existing notes')} (${row.notes.length})`,
       });
-      const noteHost = det.createDiv({
-        cls: 'pwc-zotero-library__details-inner',
-      });
       for (const n of row.notes) {
-        const line = noteHost.createDiv({ cls: 'pwc-unused__note' });
+        const line = noteList.createDiv({ cls: 'pwc-unused__note' });
         const nameEl = line.createEl('a', {
           cls: 'pwc-unused__note-name',
           text: n.ref.name,
@@ -577,15 +588,21 @@ export class UnusedReferencesPanel {
 
   private insertLines(lines: string[]): boolean {
     if (!lines.length) return true;
-    if (insertTextInActiveMarkdownNote(this.plugin.app, lines.join('\n'))) {
+    if (this.insertIntoActiveNote(lines.join('\n'))) {
       return true;
     }
     new Notice(t('Open a markdown note to insert citations'));
     return false;
   }
 
+  private freshNotesForEntry(entryId: string): FindingNoteRef[] {
+    if (!this.folder) return [];
+    const index = buildFindingNoteIndex(this.markdownFiles(), this.folder);
+    return index.get(notePrefix(entryId)) ?? [];
+  }
+
   private fileByIndex(entryId: string, index: number): TFile | null {
-    const ref = (this.notesIndex.get(notePrefix(entryId)) ?? []).find(
+    const ref = this.freshNotesForEntry(entryId).find(
       (n) => n.index === index
     );
     if (!ref) return null;
@@ -614,7 +631,9 @@ export class UnusedReferencesPanel {
       new Notice(t('Set a notes folder in plugin settings'));
       return null;
     }
-    const refs = this.notesIndex.get(notePrefix(entry.id)) ?? [];
+    // Scan frais du dossier : l'index suivant reste fiable même si le cache du panneau
+    // est obsolète (note créée à l'instant, renommage hors plugin…).
+    const refs = this.freshNotesForEntry(entry.id);
     const idx = index ?? nextFindingNoteIndex(refs);
     const path = `${folder}/${findingNoteFileName(entry.id, idx)}`;
     const existing = this.plugin.app.vault.getAbstractFileByPath(path);
@@ -625,9 +644,10 @@ export class UnusedReferencesPanel {
       path,
       buildFindingNoteContent(entry)
     );
-    refs.push({ path: file.path, name: file.basename, index: idx });
-    refs.sort((a, b) => a.index - b.index);
-    this.notesIndex.set(notePrefix(entry.id), refs);
+    const cached = this.notesIndex.get(notePrefix(entry.id)) ?? [];
+    cached.push({ path: file.path, name: file.basename, index: idx });
+    cached.sort((a, b) => a.index - b.index);
+    this.notesIndex.set(notePrefix(entry.id), cached);
     return file;
   }
 

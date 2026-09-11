@@ -607,6 +607,7 @@ export class BibManager {
     entries: PartialCSLEntry[];
     cited: Set<string>;
     content: string;
+    rawContent: string;
   } | null> {
     const settings = getScopedSettings(file);
     const countTransclusions =
@@ -653,7 +654,12 @@ export class BibManager {
       }
     }
 
-    return { entries: Array.from(pool.values()), cited, content };
+    return {
+      entries: Array.from(pool.values()),
+      cited,
+      content,
+      rawContent: raw,
+    };
   }
 
   /** Résolution dans la source scoped + globale (fichier de la note, puis bibliothèque globale). */

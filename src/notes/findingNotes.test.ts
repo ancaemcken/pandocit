@@ -2,6 +2,7 @@ import type { PartialCSLEntry } from '../bib/types';
 import {
   buildFindingNoteContent,
   buildFindingNoteIndex,
+  embeddedNoteNames,
   findingNoteLinkName,
   nextFindingNoteIndex,
   notePrefix,
@@ -64,6 +65,25 @@ describe('note naming', () => {
 
   it('normalizes link names', () => {
     expect(normalizeNoteName('ABC-0')).toBe('abc-0');
+  });
+});
+
+describe('embeddedNoteNames', () => {
+  it('detects plain, aliased, section and path embeds', () => {
+    const names = embeddedNoteNames(
+      'see ![[grieve1971-0]] and ![[grieve1971-1|alias]] and ' +
+        '![[_notes/smith-2020-0.md]] and ![[other#heading]]'
+    );
+    expect(names.has('grieve1971-0')).toBe(true);
+    expect(names.has('grieve1971-1')).toBe(true);
+    expect(names.has('smith-2020-0')).toBe(true);
+    expect(names.has('other')).toBe(true);
+  });
+
+  it('is case- and NFC-insensitive and ignores non-embeds', () => {
+    const names = embeddedNoteNames('![[Grieve1971-0]] et [[not-embed]]');
+    expect(names.has('grieve1971-0')).toBe(true);
+    expect(names.has('not-embed')).toBe(false);
   });
 });
 

@@ -36,6 +36,26 @@ export function normalizeNoteName(name: string): string {
 }
 
 /**
+ * Noms de notes transclues (`![[…]]`) d'un markdown, normalisés : chemin, extension
+ * `.md`, alias (`|`) et sous-section (`#`) retirés.
+ *
+ * À utiliser sur le contenu BRUT (l'expansion des transclusions remplace les
+ * marqueurs `![[note]]` par le contenu de la note et les ferait disparaître).
+ */
+export function embeddedNoteNames(content: string): Set<string> {
+  const out = new Set<string>();
+  const re = /!\[\[([^\[\]]+)\]\]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content))) {
+    const link = m[1].split('#')[0].split('|')[0].trim();
+    if (!link) continue;
+    const base = link.split('/').pop() ?? link;
+    out.add(normalizeNoteName(base.replace(/\.md$/i, '')));
+  }
+  return out;
+}
+
+/**
  * Index `<citekey>` → notes existantes, limité au dossier configuré (sous-dossiers
  * inclus). Le suffixe numérique est repéré depuis la fin, ce qui gère les citekeys
  * contenant eux-mêmes des tirets (`smith-2020-1` → préfixe `smith-2020`, index 1).
