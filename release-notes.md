@@ -1,1 +1,1 @@
-b57b88f feat(unused): open Zotero item links on mobile via zotero://select/library/items/<key>
+4be8496 fix(unused): embed finding notes using the full folder + filename link path
