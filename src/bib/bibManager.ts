@@ -583,22 +583,31 @@ export class BibManager {
   }
 
   /**
-   * Entrées du scope local de LA note qui ne sont citées nulle part dans le document.
+   * Données de l'onglet « non utilisées » : entrées candidates du scope local de la
+   * note, ensemble des citekeys citées dans le document, et le contenu ayant servi à
+   * les repérer (transclusions incluses le cas échéant).
    *
    * @param opts.countTransclusions  comptabiliser aussi les citations des notes
-   *   transcluses comme « utilisées » (défaut : réglage `unusedCountTransclusions`).
+   *   transcluses (défaut : réglage `unusedCountTransclusions`).
    * @param opts.mergeTranscludedBibs  inclure les bibliographies des notes transcluses
    *   dans les entrées candidates (défaut : réglage `unusedMergeTranscludedBibs`).
+   * @param opts.content  contenu de la note fourni par l'appelant (tampon d'éditeur
+   *   non sauvegardé) ; sinon lecture du coffre.
    *
    * Retourne null si aucune bibliographie locale n'est disponible.
    */
-  async getUnusedScopedEntriesForFile(
+  async getScopedUnusedDataForFile(
     file: TFile,
     opts?: {
       countTransclusions?: boolean;
       mergeTranscludedBibs?: boolean;
+      content?: string;
     }
-  ): Promise<PartialCSLEntry[] | null> {
+  ): Promise<{
+    entries: PartialCSLEntry[];
+    cited: Set<string>;
+    content: string;
+  } | null> {
     const settings = getScopedSettings(file);
     const countTransclusions =
       opts?.countTransclusions ??
@@ -626,12 +635,12 @@ export class BibManager {
     if (!pool) return null;
 
     // Usage : texte de la note, éventuellement enrichi du contenu transclus.
-    const raw = await this.plugin.app.vault.cachedRead(file);
+    const raw = opts?.content ?? (await this.plugin.app.vault.cachedRead(file));
     const content = countTransclusions
       ? await expandTransclusions(this.plugin.app, file, raw)
       : raw;
 
-    const used = new Set<string>();
+    const cited = new Set<string>();
     const groups = getCitationSegments(
       content,
       !this.plugin.settings.renderLinkCitations
@@ -640,15 +649,11 @@ export class BibManager {
       const group = getCitations(segs);
       for (const c of group.citations) {
         const id = c.id?.trim();
-        if (id) used.add(id);
+        if (id) cited.add(id);
       }
     }
 
-    const out: PartialCSLEntry[] = [];
-    for (const e of pool.values()) {
-      if (e?.id && !used.has(e.id)) out.push(e);
-    }
-    return out;
+    return { entries: Array.from(pool.values()), cited, content };
   }
 
   /** Résolution dans la source scoped + globale (fichier de la note, puis bibliothèque globale). */

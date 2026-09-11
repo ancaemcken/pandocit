@@ -1138,6 +1138,73 @@ body.pwc-cite-tap-mode .pwc-tooltip-cite-btn {
   text-decoration: underline;
 }
 
+.pwc-unused__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.pwc-unused__controls .dropdown {
+  flex: 0 0 auto;
+}
+
+.pwc-unused__controls .pwc-zotero-library__filter {
+  flex: 1 1 8rem;
+  width: auto;
+}
+
+.pwc-unused__check {
+  margin: 0.15rem 0 0 0;
+  flex: 0 0 auto;
+}
+
+.pwc-unused__selbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.1rem 0;
+}
+
+.pwc-unused__selbar.is-hidden {
+  display: none;
+}
+
+.pwc-unused__row--citedNoNotes {
+  border-left: 3px solid var(--color-yellow);
+}
+
+.pwc-unused__row--citedNotesMissing {
+  border-left: 3px solid var(--color-orange);
+}
+
+.pwc-unused__note {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.1rem 0.25rem;
+}
+
+.pwc-unused__note-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pwc-unused__note-embedded {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+}
+
+.pwc-unused__note-btn {
+  --icon-size: 14px;
+  padding: 0.1rem;
+  flex: 0 0 auto;
+}
+
 .pwc-zotero-library__ann-search-label {
   display: flex;
   flex-wrap: wrap;

@@ -42,6 +42,8 @@ export const DEFAULT_SETTINGS: ReferenceListSettings = {
   mergeScopedBibliography: false,
   unusedCountTransclusions: true,
   unusedMergeTranscludedBibs: false,
+  unusedNotesFolder: '',
+  unusedCitedNoNotesColor: '#e5a50a',
   zoteroApiLibraryType: 'user',
   zoteroApiMergeGroupIds: [],
 };
@@ -63,6 +65,10 @@ export interface ReferenceListSettings {
   unusedCountTransclusions?: boolean;
   /** Onglet « non utilisées » : inclure les bibliographies des notes transcluses dans la liste. */
   unusedMergeTranscludedBibs?: boolean;
+  /** Dossier (relatif au coffre) où créer les notes de lecture `<citekey>-<n>.md`. */
+  unusedNotesFolder?: string;
+  /** Couleur des entrées citées mais sans note de lecture (onglet « non utilisées »). */
+  unusedCitedNoNotesColor?: string;
 
   cslStyleURL?: string;
   cslStylePath?: string;
@@ -282,6 +288,36 @@ export class ReferenceListSettingsTab extends PluginSettingTab {
           .setValue(!!this.plugin.settings.mergeScopedBibliography)
           .onChange((value) => {
             this.plugin.settings.mergeScopedBibliography = value;
+            this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName(t('Notes folder'))
+      .setDesc(
+        t('Folder (vault-relative) where finding notes are created.')
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder('_notes')
+          .setValue(this.plugin.settings.unusedNotesFolder ?? '')
+          .onChange((value) => {
+            this.plugin.settings.unusedNotesFolder = value.trim();
+            this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName(t('Cited, no notes color'))
+      .setDesc(
+        t('Color for entries cited in the note but without any finding note.')
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder('#e5a50a')
+          .setValue(this.plugin.settings.unusedCitedNoNotesColor ?? '')
+          .onChange((value) => {
+            this.plugin.settings.unusedCitedNoNotesColor = value.trim();
             this.plugin.saveSettings();
           })
       );

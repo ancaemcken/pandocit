@@ -109,6 +109,25 @@ export default {
     'Fusionar la bibliografía de notas transcluidas',
   'Also list entries from the bibliography files of transcluded notes.':
     'Incluye también entradas de los archivos de bibliografía de notas transcluidas.',
+  'All unused': 'Todas las no utilizadas',
+  'Cited, no notes': 'Citada, sin notas',
+  All: 'Todo',
+  'Notes not embedded': 'Notas no incluidas',
+  'Create note': 'Crear nota',
+  'Create note(s)': 'Crear nota(s)',
+  'Existing notes': 'Notas existentes',
+  'Include at cursor': 'Incluir en el cursor',
+  Embedded: 'Incluida',
+  'Select all': 'Seleccionar todo',
+  'Clear selection': 'Borrar selección',
+  'Notes folder': 'Carpeta de notas',
+  'Folder (vault-relative) where finding notes are created.':
+    'Carpeta (relativa al vault) donde se crean las notas de lectura.',
+  'Cited, no notes color': 'Color de «citada, sin notas»',
+  'Color for entries cited in the note but without any finding note.':
+    'Color de las entradas citadas en la nota pero sin nota de lectura.',
+  'Set a notes folder in plugin settings':
+    'Defina una carpeta de notas en los ajustes del plugin',
   'This note has no bibliography file':
     'Esta nota no tiene un archivo de bibliografía',
   'Could not open in Zotero': 'No se pudo abrir en Zotero',

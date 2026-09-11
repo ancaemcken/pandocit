@@ -109,6 +109,25 @@ export default {
     'Bibliografie transkludierter Notizen zusammenführen',
   'Also list entries from the bibliography files of transcluded notes.':
     'Listet auch Einträge der Bibliografiedateien transkludierter Notizen auf.',
+  'All unused': 'Alle unbenutzten',
+  'Cited, no notes': 'Zitiert, keine Notizen',
+  All: 'Alle',
+  'Notes not embedded': 'Notizen nicht eingebunden',
+  'Create note': 'Notiz erstellen',
+  'Create note(s)': 'Notiz(en) erstellen',
+  'Existing notes': 'Vorhandene Notizen',
+  'Include at cursor': 'Am Cursor einfügen',
+  Embedded: 'Eingebunden',
+  'Select all': 'Alle auswählen',
+  'Clear selection': 'Auswahl löschen',
+  'Notes folder': 'Notizen-Ordner',
+  'Folder (vault-relative) where finding notes are created.':
+    'Ordner (relativ zum Tresor), in dem Lektürenotizen erstellt werden.',
+  'Cited, no notes color': 'Farbe „zitiert, keine Notizen“',
+  'Color for entries cited in the note but without any finding note.':
+    'Farbe für zitierte Einträge ohne Lektürenotiz.',
+  'Set a notes folder in plugin settings':
+    'Notizen-Ordner in den Plugin-Einstellungen festlegen',
   'This note has no bibliography file':
     'Diese Notiz hat keine Bibliografiedatei',
   'Could not open in Zotero': 'In Zotero nicht zu öffnen',

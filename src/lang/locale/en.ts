@@ -136,6 +136,25 @@ export default {
     'Merge bibliography from transcluded notes',
   'Also list entries from the bibliography files of transcluded notes.':
     'Also list entries from the bibliography files of transcluded notes.',
+  'All unused': 'All unused',
+  'Cited, no notes': 'Cited, no notes',
+  All: 'All',
+  'Notes not embedded': 'Notes not embedded',
+  'Create note': 'Create note',
+  'Create note(s)': 'Create note(s)',
+  'Existing notes': 'Existing notes',
+  'Include at cursor': 'Include at cursor',
+  Embedded: 'Embedded',
+  'Select all': 'Select all',
+  'Clear selection': 'Clear selection',
+  'Notes folder': 'Notes folder',
+  'Folder (vault-relative) where finding notes are created.':
+    'Folder (vault-relative) where finding notes are created.',
+  'Cited, no notes color': 'Cited, no notes color',
+  'Color for entries cited in the note but without any finding note.':
+    'Color for entries cited in the note but without any finding note.',
+  'Set a notes folder in plugin settings':
+    'Set a notes folder in plugin settings',
   "This note has no bibliography file": "This note has no bibliography file",
   'Could not open in Zotero': 'Could not open in Zotero',
   'Open URL': 'Open URL',
