@@ -1,1 +1,1 @@
-79d50f5 fix(unused): exclude own entry when the active note is a finding note
+b9a38dd refactor(transclusions): detect embeds via metadata cache; avoid per-citation doc toString
