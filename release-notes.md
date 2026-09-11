@@ -1,1 +1,1 @@
-4be8496 fix(unused): embed finding notes using the full folder + filename link path
+b5e5f92 feat(library): Open in Zotero for local bib entries via item-key URI (works without API sync / on mobile)
