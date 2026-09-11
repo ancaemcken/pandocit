@@ -1,1 +1,1 @@
-0ad62b4 docs: fork notice + local-first feature docs in all READMEs
+79d50f5 fix(unused): exclude own entry when the active note is a finding note
