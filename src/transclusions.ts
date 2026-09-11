@@ -16,9 +16,11 @@ const MAX_DEPTH = 16;
  * (liste de références, cache citeproc).
  *
  * Les transclusions sont détectées via le cache d'Obsidian (`embeddedNotes`), pas en
- * analysant le texte. Les offsets du cache servent à remplacer chaque `![[…]]` par le
- * contenu de la cible — le contenu fourni doit donc correspondre à celui qu'Obsidian a
- * analysé (contenu enregistré du coffre).
+ * analysant le texte. L'offset du cache sert d'abord, mais si le contenu fourni ne
+ * coïncide pas exactement avec celui analysé (édition non enregistrée, fins de ligne
+ * CRLF…) on retrouve le marqueur `original` par recherche textuelle : le cache garde
+ * l'autorité (pas de faux positifs dans les blocs de code) et l'expansion reste robuste
+ * aux décalages d'offsets.
  *
  * Anti-cycle (ensemble des fichiers déjà dépliés) + borne de profondeur. Limites v1 :
  * les transclusions à sous-section (`![[Note#titre]]`, `![[Note#^bloc]]`) et les
@@ -39,15 +41,30 @@ export async function expandTransclusions(
     if (depth > MAX_DEPTH) return text;
 
     const edits: { start: number; end: number; text: string }[] = [];
+    let cursor = 0;
 
     for (const note of embeddedNotes(app, from)) {
-      // Sous-sections et positions inconnues : laissées littérales.
-      if (note.subpath || note.start < 0 || note.end < 0) continue;
-      // Le cache et le contenu doivent correspondre : si Obsidian a analysé une version
-      // plus récente que `content` (édition non enregistrée), les offsets sont faux et
-      // on laisse le marqueur littéral plutôt que de remplacer la mauvaise plage.
-      if (text.slice(note.start, note.end) !== note.original) continue;
+      // Sous-sections : laissées littérales (v1).
+      if (note.subpath) continue;
       if (seen.has(note.file.path)) continue;
+
+      // Offset du cache s'il tombe bien sur le marqueur, sinon recherche du texte du
+      // marqueur (robuste aux décalages cache/contenu).
+      let start = note.start;
+      let end = note.end;
+      if (
+        start < 0 ||
+        end <= start ||
+        end > text.length ||
+        text.slice(start, end) !== note.original
+      ) {
+        if (!note.original) continue;
+        const at = text.indexOf(note.original, cursor);
+        if (at < 0) continue;
+        start = at;
+        end = at + note.original.length;
+      }
+      cursor = end;
       seen.add(note.file.path);
 
       let inner: string;
@@ -60,8 +77,8 @@ export async function expandTransclusions(
       }
 
       edits.push({
-        start: note.start,
-        end: note.end,
+        start,
+        end,
         text: `\n${await expand(note.file, inner, depth + 1)}\n`,
       });
     }

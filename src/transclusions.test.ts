@@ -114,4 +114,42 @@ describe('expandTransclusions', () => {
     expect(out).toContain('[@smith2020]');
     expect(out).not.toContain('![[B|voir note B]]');
   });
+
+  it('locates the marker when cached offsets do not match the content', async () => {
+    // Cache désynchronisé (CRLF / édition non enregistrée) : offsets faux mais marqueur
+    // présent dans le texte → l'expansion doit quand même avoir lieu.
+    const app = {
+      vault: {
+        cachedRead: async (f: { path: string }) => FILES[f.path] ?? '',
+      },
+      metadataCache: {
+        getFirstLinkpathDest: (link: string) => {
+          const c = `${link}.md`;
+          return FILES[c] !== undefined
+            ? { path: c, extension: 'md' }
+            : null;
+        },
+        getFileCache: () => ({
+          embeds: [
+            {
+              link: 'B',
+              original: '![[B]]',
+              position: {
+                start: { offset: 9999 },
+                end: { offset: 9999 + '![[B]]'.length },
+              },
+            },
+          ],
+        }),
+      },
+    } as unknown as App;
+
+    const out = await expandTransclusions(
+      app,
+      { path: 'A.md', extension: 'md' },
+      FILES['A.md']
+    );
+    expect(out).toContain('[@smith2020]');
+    expect(out).not.toContain('![[B]]');
+  });
 });
