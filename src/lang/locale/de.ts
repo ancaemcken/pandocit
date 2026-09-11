@@ -102,6 +102,13 @@ export default {
   References: 'Literatur',
   'Unused references': 'Unbenutzte Referenzen',
   'No unused references': 'Keine unbenutzten Referenzen',
+  'Count transcluded notes': 'Transkludierte Notizen zählen',
+  'References cited in transcluded notes are counted as used.':
+    'In transkludierten Notizen zitierte Referenzen gelten als benutzt.',
+  'Merge bibliography from transcluded notes':
+    'Bibliografie transkludierter Notizen zusammenführen',
+  'Also list entries from the bibliography files of transcluded notes.':
+    'Listet auch Einträge der Bibliografiedateien transkludierter Notizen auf.',
   'This note has no bibliography file':
     'Diese Notiz hat keine Bibliografiedatei',
   'Could not open in Zotero': 'In Zotero nicht zu öffnen',

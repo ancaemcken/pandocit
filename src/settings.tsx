@@ -40,6 +40,8 @@ export const DEFAULT_SETTINGS: ReferenceListSettings = {
   showCitekeyTooltips: true,
   underlineCitekeys: false,
   mergeScopedBibliography: false,
+  unusedCountTransclusions: true,
+  unusedMergeTranscludedBibs: false,
   zoteroApiLibraryType: 'user',
   zoteroApiMergeGroupIds: [],
 };
@@ -57,6 +59,10 @@ export interface ReferenceListSettings {
   pathToBibliography?: string;
   /** Fusionne le fichier `bibliography` de la note avec la bibliothèque globale/Zotero. */
   mergeScopedBibliography?: boolean;
+  /** Onglet « non utilisées » : compter les citations des notes transcluses comme utilisées. */
+  unusedCountTransclusions?: boolean;
+  /** Onglet « non utilisées » : inclure les bibliographies des notes transcluses dans la liste. */
+  unusedMergeTranscludedBibs?: boolean;
 
   cslStyleURL?: string;
   cslStylePath?: string;

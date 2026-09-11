@@ -129,6 +129,13 @@ export default {
   'References': 'References',
   'Unused references': 'Unused references',
   'No unused references': 'No unused references',
+  'Count transcluded notes': 'Count transcluded notes',
+  'References cited in transcluded notes are counted as used.':
+    'References cited in transcluded notes are counted as used.',
+  'Merge bibliography from transcluded notes':
+    'Merge bibliography from transcluded notes',
+  'Also list entries from the bibliography files of transcluded notes.':
+    'Also list entries from the bibliography files of transcluded notes.',
   "This note has no bibliography file": "This note has no bibliography file",
   'Could not open in Zotero': 'Could not open in Zotero',
   'Open URL': 'Open URL',

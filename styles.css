@@ -1099,6 +1099,26 @@ body.pwc-cite-tap-mode .pwc-tooltip-cite-btn {
 }
 
 /* Onglet « références non utilisées » */
+.pwc-unused__toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.pwc-unused__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.pwc-unused__toggle input {
+  margin: 0;
+}
+
 .pwc-unused__links {
   display: flex;
   flex-direction: column;

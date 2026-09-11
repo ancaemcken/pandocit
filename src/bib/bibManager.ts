@@ -4,6 +4,7 @@ import ReferenceList from 'src/main';
 import { PartialCSLEntry } from './types';
 import Fuse from 'fuse.js';
 import { wikilinkLinktext } from './wikilink';
+import { expandTransclusions } from 'src/transclusions';
 import {
   bibToCSL,
   getBibPath,
@@ -529,12 +530,13 @@ export class BibManager {
    */
   private async resolveScopedContext(
     settings: ScopedSettings | null,
-    contextFile?: TFile
+    contextFile?: TFile,
+    includeEmbeds: boolean = this.plugin.settings.mergeScopedBibliography
   ): Promise<{
     bibCache: Map<string, PartialCSLEntry>;
     fuse: Fuse<PartialCSLEntry>;
   } | null> {
-    const merge = this.plugin.settings.mergeScopedBibliography;
+    const merge = includeEmbeds;
     const layers: ScopedBibCacheEntry[] = [];
 
     if (settings?.bibliography) {
@@ -581,22 +583,54 @@ export class BibManager {
   }
 
   /**
-   * Entrées du fichier `bibliography` (frontmatter) de LA note — fichiers transclus
-   * exclus — qui ne sont citées nulle part dans le texte de cette note (transclusions
-   * exclues). Retourne null si la note ne déclare pas de fichier local.
+   * Entrées du scope local de LA note qui ne sont citées nulle part dans le document.
+   *
+   * @param opts.countTransclusions  comptabiliser aussi les citations des notes
+   *   transcluses comme « utilisées » (défaut : réglage `unusedCountTransclusions`).
+   * @param opts.mergeTranscludedBibs  inclure les bibliographies des notes transcluses
+   *   dans les entrées candidates (défaut : réglage `unusedMergeTranscludedBibs`).
+   *
+   * Retourne null si aucune bibliographie locale n'est disponible.
    */
   async getUnusedScopedEntriesForFile(
-    file: TFile
+    file: TFile,
+    opts?: {
+      countTransclusions?: boolean;
+      mergeTranscludedBibs?: boolean;
+    }
   ): Promise<PartialCSLEntry[] | null> {
     const settings = getScopedSettings(file);
-    if (!settings?.bibliography) return null;
+    const countTransclusions =
+      opts?.countTransclusions ??
+      this.plugin.settings.unusedCountTransclusions ??
+      true;
+    const mergeTranscludedBibs =
+      opts?.mergeTranscludedBibs ??
+      this.plugin.settings.unusedMergeTranscludedBibs ??
+      false;
 
-    const cache = await this.getScopedBib(
-      this.resolveScopedBibPath(settings.bibliography)
-    );
-    if (!cache) return null;
+    if (!settings?.bibliography && !mergeTranscludedBibs) return null;
 
-    const content = await this.plugin.app.vault.cachedRead(file);
+    // Entrées candidates : fichier propre, éventuellement complété par les
+    // bibliographies des notes transcluses (mode « merge bib »).
+    let pool: Map<string, PartialCSLEntry> | null = null;
+    if (mergeTranscludedBibs) {
+      const ctx = await this.resolveScopedContext(settings, file, true);
+      pool = ctx?.bibCache ?? null;
+    } else if (settings?.bibliography) {
+      const cache = await this.getScopedBib(
+        this.resolveScopedBibPath(settings.bibliography)
+      );
+      pool = cache?.bibCache ?? null;
+    }
+    if (!pool) return null;
+
+    // Usage : texte de la note, éventuellement enrichi du contenu transclus.
+    const raw = await this.plugin.app.vault.cachedRead(file);
+    const content = countTransclusions
+      ? await expandTransclusions(this.plugin.app, file, raw)
+      : raw;
+
     const used = new Set<string>();
     const groups = getCitationSegments(
       content,
@@ -611,7 +645,7 @@ export class BibManager {
     }
 
     const out: PartialCSLEntry[] = [];
-    for (const e of cache.bibCache.values()) {
+    for (const e of pool.values()) {
       if (e?.id && !used.has(e.id)) out.push(e);
     }
     return out;

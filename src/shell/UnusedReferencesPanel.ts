@@ -75,6 +75,39 @@ export class UnusedReferencesPanel {
       ).setTimeout(() => this.applyFilter(), 120);
     });
 
+    const toggles = inner.createDiv({ cls: 'pwc-unused__toggles' });
+    const addToggle = (
+      label: string,
+      desc: string,
+      get: () => boolean,
+      set: (value: boolean) => void
+    ) => {
+      const wrap = toggles.createEl('label', {
+        cls: 'pwc-unused__toggle',
+        attr: { title: desc },
+      });
+      const cb = wrap.createEl('input', { type: 'checkbox' });
+      cb.checked = get();
+      cb.addEventListener('change', () => {
+        set(cb.checked);
+        void this.plugin.saveSettings();
+        void this.refresh();
+      });
+      wrap.createSpan({ text: label });
+    };
+    addToggle(
+      t('Count transcluded notes'),
+      t('References cited in transcluded notes are counted as used.'),
+      () => this.plugin.settings.unusedCountTransclusions ?? true,
+      (v) => (this.plugin.settings.unusedCountTransclusions = v)
+    );
+    addToggle(
+      t('Merge bibliography from transcluded notes'),
+      t('Also list entries from the bibliography files of transcluded notes.'),
+      () => this.plugin.settings.unusedMergeTranscludedBibs ?? false,
+      (v) => (this.plugin.settings.unusedMergeTranscludedBibs = v)
+    );
+
     this.listEl = inner.createDiv({
       cls: 'pwc-zotero-library__list pwc-zotero-library__list--tree',
     });
@@ -123,8 +156,15 @@ export class UnusedReferencesPanel {
     }
     this.activeFilePath = file.path;
     try {
-      const unused =
-        await this.plugin.bibManager.getUnusedScopedEntriesForFile(file);
+      const unused = await this.plugin.bibManager.getUnusedScopedEntriesForFile(
+        file,
+        {
+          countTransclusions:
+            this.plugin.settings.unusedCountTransclusions ?? true,
+          mergeTranscludedBibs:
+            this.plugin.settings.unusedMergeTranscludedBibs ?? false,
+        }
+      );
       if (file.path !== this.activeFilePath) return; // fichier changé entre-temps
       this.entries = unused ?? [];
       if (this.entries.length === 0) {
